@@ -90,7 +90,7 @@ CREATE TABLE projects (
   portfolio_id         UUID REFERENCES portfolios(id),
   structure_id         UUID REFERENCES structures(id),
   stage                TEXT NOT NULL DEFAULT 'En Desarrollo'
-                         CHECK (stage IN ('En Desarrollo','Completado','Cancelado','En Pausa','Por Iniciar')),
+                         CHECK (stage IN ('Backlog','Análisis / Diseño','Sprint Planning','En Desarrollo','Code Review','QA / Pruebas','UAT','Pre-Producción','Go Live','Completado','Cancelado','En Pausa','Por Iniciar')),
   description          TEXT DEFAULT '',
   dev_start_date       DATE,
   go_live_date         DATE,
