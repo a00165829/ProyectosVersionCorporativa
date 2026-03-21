@@ -4,15 +4,12 @@ import { MsalProvider } from '@azure/msal-react'
 import { Toaster } from 'sonner'
 import { msalInstance } from '@/lib/msal'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
-import { PortfolioProvider } from '@/context/PortfolioContext'
 import AppLayout from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
 import PendingApproval from '@/pages/PendingApproval'
 import Dashboard from '@/pages/Dashboard'
 import ProjectsList from '@/pages/ProjectsList'
 import ProjectDetail from '@/pages/ProjectDetail'
-import CompletedProjects from '@/pages/CompletedProjects'
-import CancelledProjects from '@/pages/CancelledProjects'
 import AdminUsers from '@/pages/AdminUsers'
 import NotFound from '@/pages/NotFound'
 import { Loader2 } from 'lucide-react'
@@ -30,23 +27,29 @@ function AppRoutes() {
     </div>
   )
 
-  if (!user) return <Routes><Route path="*" element={<Login />} /></Routes>
-  if (!isApproved) return <Routes><Route path="*" element={<PendingApproval />} /></Routes>
+  if (!user) return (
+    <Routes>
+      <Route path="*" element={<Login />} />
+    </Routes>
+  )
+
+  if (!isApproved) return (
+    <Routes>
+      <Route path="*" element={<PendingApproval />} />
+    </Routes>
+  )
 
   return (
-    <PortfolioProvider>
-      <AppLayout>
-        <Routes>
-          <Route path="/"               element={<Dashboard />} />
-          <Route path="/projects"       element={<ProjectsList />} />
-          <Route path="/projects/:id"   element={<ProjectDetail />} />
-          <Route path="/completed"      element={<CompletedProjects />} />
-          <Route path="/cancelled"      element={<CancelledProjects />} />
-          {isAdmin && <Route path="/admin/users" element={<AdminUsers />} />}
-          <Route path="*"               element={<Navigate to="/" replace />} />
-        </Routes>
-      </AppLayout>
-    </PortfolioProvider>
+    <AppLayout>
+      <Routes>
+        <Route path="/"                element={<Dashboard />} />
+        <Route path="/projects"        element={<ProjectsList />} />
+        <Route path="/projects/:id"    element={<ProjectDetail />} />
+        {isAdmin && <Route path="/admin/users" element={<AdminUsers />} />}
+        <Route path="/404"             element={<NotFound />} />
+        <Route path="*"                element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppLayout>
   )
 }
 

@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000'  // Vite proxy maneja /api → backend
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 async function getToken(): Promise<string | null> {
   // En modo dev el backend no requiere token real
