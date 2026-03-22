@@ -89,10 +89,23 @@ CREATE TABLE projects (
   name                 TEXT NOT NULL,
   portfolio_id         UUID REFERENCES portfolios(id),
   structure_id         UUID REFERENCES structures(id),
-  stage                TEXT NOT NULL DEFAULT 'En Desarrollo'
-                         CHECK (stage IN ('En Desarrollo','Completado','Cancelado','En Pausa','Por Iniciar')),
+  classification       TEXT DEFAULT 'Proyecto' CHECK (classification IN ('Proyecto','Mejora')),
+  priority             INTEGER,
+  progress             INTEGER NOT NULL DEFAULT 0,
+  stage                TEXT NOT NULL DEFAULT 'Backlog'
+                         CHECK (stage IN ('Backlog','Análisis / Diseño','Sprint Planning','En Desarrollo',
+                                          'Code Review','QA / Pruebas','UAT','Pre-Producción','Go Live',
+                                          'Completado','Cancelado','En Pausa','Por Iniciar')),
+  scrum_stage          TEXT NOT NULL DEFAULT 'Backlog'
+                         CHECK (scrum_stage IN ('Backlog','Análisis / Diseño','Sprint Planning','En Desarrollo',
+                                                'Code Review','QA / Pruebas','UAT','Pre-Producción','Go Live',
+                                                'Completado','Cancelado','En Pausa','Por Iniciar')),
+  responsible_id       UUID,
   description          TEXT DEFAULT '',
   dev_start_date       DATE,
+  dev_end_date         DATE,
+  test_start_date      DATE,
+  test_end_date        DATE,
   go_live_date         DATE,
   planned_go_live_date DATE,
   project_start_date   DATE,
@@ -259,3 +272,33 @@ CREATE TRIGGER trg_projects_updated_at
 CREATE TRIGGER trg_profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Campos adicionales en projects (clasificación, avance, etapa scrum)
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS progress        INT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+  ADD COLUMN IF NOT EXISTS classification  TEXT DEFAULT 'Proyecto' CHECK (classification IN ('Proyecto','Mejora')),
+  ADD COLUMN IF NOT EXISTS priority        INT,
+  ADD COLUMN IF NOT EXISTS responsible_id  UUID REFERENCES participants(id),
+  ADD COLUMN IF NOT EXISTS scrum_stage     TEXT NOT NULL DEFAULT 'Backlog'
+    CHECK (scrum_stage IN ('Backlog','Análisis / Diseño','Sprint Planning','En Desarrollo',
+      'Code Review','QA / Pruebas','UAT','Pre-Producción','Go Live','Completado','Cancelado')),
+  ADD COLUMN IF NOT EXISTS dev_end_date    DATE,
+  ADD COLUMN IF NOT EXISTS test_start_date DATE,
+  ADD COLUMN IF NOT EXISTS test_end_date   DATE;
+
+-- ── Historial de estatus de proyectos ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS project_status_history (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id     UUID REFERENCES profiles(id),
+  description TEXT NOT NULL,
+  stage       TEXT,
+  notes       TEXT DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Agregar updated_at a structures si no existe
+ALTER TABLE structures ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- Agregar deleted_at a project_budgets si no existe  
+ALTER TABLE project_budgets ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;

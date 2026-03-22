@@ -1,36 +1,43 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
-import { FolderKanban, CheckCircle2, Clock, PauseCircle, TrendingUp, AlertCircle } from 'lucide-react'
+import { usePortfolio } from '@/context/PortfolioContext'
+import { FolderKanban, CheckCircle2, TrendingUp, AlertCircle } from 'lucide-react'
 
 interface Project {
-  id: string; name: string; stage: string; description: string
+  id: string; name: string; scrum_stage: string; description: string
   go_live_date: string | null; planned_go_live_date: string | null
+  progress: number; classification: string; responsible_name: string | null
 }
 
 const STAGE_COLOR: Record<string, string> = {
-  'En Desarrollo': 'bg-blue-100 text-blue-700',
-  'Completado':    'bg-green-100 text-green-700',
-  'Cancelado':     'bg-red-100 text-red-700',
-  'En Pausa':      'bg-amber-100 text-amber-700',
-  'Por Iniciar':   'bg-purple-100 text-purple-700',
+  'Backlog':'bg-gray-100 text-gray-600','En Desarrollo':'bg-indigo-100 text-indigo-700',
+  'UAT':'bg-amber-100 text-amber-700','Go Live':'bg-green-100 text-green-700',
+  'Completado':'bg-green-100 text-green-700','Cancelado':'bg-red-100 text-red-700',
+  'En Pausa':'bg-orange-100 text-orange-700','Por Iniciar':'bg-purple-100 text-purple-700',
 }
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { activePortfolioId, activePortfolio } = usePortfolio()
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
-    queryKey: ['projects-dashboard'],
-    queryFn: () => api.get<Project[]>('/api/projects?portfolio_id=33333333-0000-0000-0000-000000000001'),
+    queryKey: ['projects', activePortfolioId],
+    queryFn: () => api.get<Project[]>(`/api/projects?portfolio_id=${activePortfolioId}`),
+    enabled: !!activePortfolioId,
   })
 
-  const stats = {
-    total:       projects.length,
-    desarrollo:  projects.filter(p => p.stage === 'En Desarrollo').length,
-    completados: projects.filter(p => p.stage === 'Completado').length,
-    pausa:       projects.filter(p => p.stage === 'En Pausa').length,
-    porIniciar:  projects.filter(p => p.stage === 'Por Iniciar').length,
-  }
+  const active = projects.filter(p => p.scrum_stage !== 'Completado' && p.scrum_stage !== 'Cancelado' && !('deleted_at' in p && (p as any).deleted_at))
+  const desarrollo = projects.filter(p => p.scrum_stage === 'En Desarrollo').length
+  const completados = projects.filter(p => p.scrum_stage === 'Completado').length
+  const enRiesgo = projects.filter(p => {
+    if (!p.go_live_date || !p.planned_go_live_date) return false
+    return new Date(p.go_live_date) > new Date(p.planned_go_live_date)
+  }).length
+
+  const avgProgress = active.length > 0
+    ? Math.round(active.reduce((sum, p) => sum + (p.progress || 0), 0) / active.length)
+    : 0
 
   const StatCard = ({ label, value, icon: Icon, color }: any) => (
     <div className="bg-card border rounded-xl p-5">
@@ -46,60 +53,72 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Bienvenido, {user?.displayName}
+          {activePortfolio?.name} — Bienvenido, {user?.displayName}
         </p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total proyectos"  value={stats.total}       icon={FolderKanban}  color="bg-blue-50 text-blue-600" />
-        <StatCard label="En desarrollo"    value={stats.desarrollo}  icon={TrendingUp}    color="bg-indigo-50 text-indigo-600" />
-        <StatCard label="Completados"      value={stats.completados} icon={CheckCircle2}  color="bg-green-50 text-green-600" />
-        <StatCard label="En pausa"         value={stats.pausa}       icon={PauseCircle}   color="bg-amber-50 text-amber-600" />
+        <StatCard label="Total proyectos" value={projects.length} icon={FolderKanban} color="bg-blue-50 text-blue-600" />
+        <StatCard label="En desarrollo"   value={desarrollo}      icon={TrendingUp}   color="bg-indigo-50 text-indigo-600" />
+        <StatCard label="Completados"     value={completados}     icon={CheckCircle2} color="bg-green-50 text-green-600" />
+        <StatCard label="En riesgo"       value={enRiesgo}        icon={AlertCircle}  color="bg-red-50 text-red-600" />
       </div>
 
-      {/* Projects list */}
+      <div className="bg-card border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <span className="font-medium">Avance promedio del portafolio</span>
+          <span className="text-2xl font-bold text-primary">{avgProgress}%</span>
+        </div>
+        <div className="h-3 rounded-full bg-muted overflow-hidden">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${avgProgress}%` }} />
+        </div>
+      </div>
+
       <div className="bg-card border rounded-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="font-semibold">Proyectos activos</h2>
           <a href="/projects" className="text-sm text-primary hover:underline">Ver todos</a>
         </div>
-
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin h-6 w-6 rounded-full border-2 border-primary border-t-transparent" />
           </div>
-        ) : projects.length === 0 ? (
+        ) : active.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <FolderKanban className="h-10 w-10 mb-3 opacity-40" />
-            <p className="text-sm">No hay proyectos registrados</p>
+            <p className="text-sm">No hay proyectos activos</p>
           </div>
         ) : (
           <div className="divide-y">
-            {projects.filter(p => p.stage !== 'Completado' && p.stage !== 'Cancelado').map(project => (
-              <a
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors"
-              >
+            {active.slice(0, 8).map(p => (
+              <a key={p.id} href={`/projects/${p.id}`}
+                className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/50 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{project.name}</p>
-                  {project.description && (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{project.description}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">{p.name}</p>
+                    {p.classification && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                        p.classification === 'Proyecto' ? 'bg-primary/10 text-primary' : 'bg-secondary text-secondary-foreground'
+                      }`}>{p.classification === 'Proyecto' ? 'P' : 'M'}</span>
+                    )}
+                  </div>
+                  {p.responsible_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">Líder: {p.responsible_name}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-3 ml-4">
-                  {project.planned_go_live_date && (
-                    <span className="text-xs text-muted-foreground hidden sm:block">
-                      Go-live: {new Date(project.planned_go_live_date).toLocaleDateString('es-MX')}
-                    </span>
-                  )}
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STAGE_COLOR[project.stage] || 'bg-gray-100 text-gray-700'}`}>
-                    {project.stage}
+                <div className="flex items-center gap-3 ml-4 shrink-0">
+                  <div className="hidden sm:flex items-center gap-2 w-24">
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full rounded-full ${p.progress>=80?'bg-green-500':p.progress>=50?'bg-blue-500':p.progress>=25?'bg-amber-500':'bg-red-500'}`}
+                        style={{ width: `${p.progress}%` }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-8">{p.progress}%</span>
+                  </div>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STAGE_COLOR[p.scrum_stage] || 'bg-gray-100 text-gray-600'}`}>
+                    {p.scrum_stage}
                   </span>
                 </div>
               </a>
