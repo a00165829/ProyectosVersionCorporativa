@@ -221,6 +221,7 @@ CREATE TABLE resource_assignments (
   project_id            UUID REFERENCES projects(id),
   activity_id           UUID REFERENCES activities(id),
   portfolio_id          UUID REFERENCES portfolios(id),
+  resource_id           UUID REFERENCES resources(id),
   start_date            DATE NOT NULL,
   end_date              DATE NOT NULL,
   allocation_percentage INT NOT NULL CHECK (allocation_percentage BETWEEN 1 AND 100),
@@ -302,3 +303,10 @@ ALTER TABLE structures ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL 
 
 -- Agregar deleted_at a project_budgets si no existe  
 ALTER TABLE project_budgets ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+-- Campos adicionales de presupuesto (estatus, tipo, centro de costos)
+ALTER TABLE project_budgets ADD COLUMN IF NOT EXISTS budget_status TEXT NOT NULL DEFAULT 'Pendiente de autorizar'
+  CHECK (budget_status IN ('Pendiente de autorizar','Autorizado'));
+ALTER TABLE project_budgets ADD COLUMN IF NOT EXISTS budget_type TEXT NOT NULL DEFAULT 'CAPEX'
+  CHECK (budget_type IN ('CAPEX','OPEX'));
+ALTER TABLE project_budgets ADD COLUMN IF NOT EXISTS cost_center TEXT DEFAULT 'Pendiente';

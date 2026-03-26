@@ -137,12 +137,39 @@ export default function ProjectDetail() {
         </div>
         {isManager && (
           <div className="flex gap-2 shrink-0">
-            <button onClick={()=>setShowEdit(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
-              <Edit className="h-4 w-4"/> Editar
-            </button>
-            <button onClick={()=>deleteProject.mutate()} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors">
-              <Trash2 className="h-4 w-4"/>
-            </button>
+           <button onClick={() => {
+  const start = project.project_start_date || project.dev_start_date
+  const end = project.go_live_date || project.planned_go_live_date
+  if (!start || !end) {
+    toast.error('Se necesita fecha de inicio y fecha de Go-Live')
+    return
+  }
+  const startMs = new Date(start).getTime()
+  const endMs = new Date(end).getTime()
+  const today = Date.now()
+  let pct = 0
+  if (today >= endMs) pct = 100
+  else if (today <= startMs) pct = 0
+  else pct = Math.round(((today - startMs) / (endMs - startMs)) * 100)
+  api.put(`/api/projects/${id}`, { progress: pct })
+    .then(() => {
+      qc.invalidateQueries({ queryKey: ['project', id] })
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      toast.success(`Avance calculado: ${pct}%`)
+    })
+    .catch((e: any) => toast.error(e.message))
+}}
+className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+  <TrendingUp className="h-4 w-4"/> Calcular
+</button>
+<button onClick={()=>setShowEdit(true)}
+  className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+  <Edit className="h-4 w-4"/> Editar
+</button>
+<button onClick={()=>deleteProject.mutate()}
+  className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors">
+  <Trash2 className="h-4 w-4"/>
+</button>
           </div>
         )}
       </div>
@@ -298,18 +325,35 @@ export default function ProjectDetail() {
             <h2 className="font-semibold mb-3 flex items-center gap-2"><User className="h-4 w-4 text-primary"/> Responsable</h2>
             <p className="text-sm">{project.responsible_name||'Sin asignar'}</p>
           </div>
+
           <div className="bg-card border rounded-xl p-5">
             <h2 className="font-semibold mb-3 flex items-center gap-2"><Calendar className="h-4 w-4 text-primary"/> Fechas</h2>
-            {project.dev_start_date && <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio desarrollo</span><span className="text-sm font-medium">{fmt(project.dev_start_date)}</span></div>}
-            {project.planned_go_live_date && <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Go-Live planeado</span><span className="text-sm font-medium">{fmt(project.planned_go_live_date)}</span></div>}
-            {project.go_live_date && <div className="flex justify-between py-2"><span className="text-sm text-muted-foreground">Go-Live real</span><span className="text-sm font-medium">{fmt(project.go_live_date)}</span></div>}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio proyecto</span><span className="text-sm font-medium">{fmt(project.project_start_date)}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio desarrollo</span><span className="text-sm font-medium">{fmt(project.dev_start_date)}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Fin desarrollo</span><span className="text-sm font-medium">{fmt(project.dev_end_date)}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio pruebas</span><span className="text-sm font-medium">{fmt(project.test_start_date)}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Fin pruebas</span><span className="text-sm font-medium">{fmt(project.test_end_date)}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Go-Live planeado</span><span className="text-sm font-medium">{fmt(project.planned_go_live_date)}</span></div>
+              <div className="flex justify-between py-2 col-span-2"><span className="text-sm text-muted-foreground">Go-Live real</span><span className="text-sm font-medium">{fmt(project.go_live_date)}</span></div>
+            </div>
           </div>
+
           {project.priority!==null && (
             <div className="bg-card border rounded-xl p-5">
               <h2 className="font-semibold mb-3 flex items-center gap-2"><Tag className="h-4 w-4 text-primary"/> Prioridad</h2>
               <p className="text-2xl font-bold text-primary">#{project.priority}</p>
             </div>
           )}
+
+          <div className="bg-card border rounded-xl p-5">
+            <h2 className="font-semibold mb-3 flex items-center gap-2"><Tag className="h-4 w-4 text-primary"/> Detalles</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between py-1"><span className="text-sm text-muted-foreground">Tipo</span><span className="text-sm font-medium">{project.classification || '—'}</span></div>
+              <div className="flex justify-between py-1"><span className="text-sm text-muted-foreground">Etapa</span><span className="text-sm font-medium">{project.scrum_stage || '—'}</span></div>
+              {project.description && <div className="pt-2 border-t"><span className="text-xs text-muted-foreground">Descripción</span><p className="text-sm mt-1">{project.description}</p></div>}
+            </div>
+          </div>
         </div>
       </div>
 

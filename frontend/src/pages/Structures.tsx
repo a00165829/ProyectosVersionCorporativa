@@ -25,8 +25,9 @@ export default function Structures() {
   const [fAmount, setFAmount] = useState('')
 
   const { data: structures = [], isLoading } = useQuery<Structure[]>({
-    queryKey: ['structures'],
-    queryFn: () => api.get<Structure[]>('/api/structures'),
+    queryKey: ['structures', activePortfolioId],
+    queryFn: () => api.get<Structure[]>(`/api/structures?portfolio_id=${activePortfolioId}`),
+    enabled: !!activePortfolioId,
   })
 
   const save = useMutation({
@@ -47,7 +48,7 @@ export default function Structures() {
   })
 
   const openEdit = (s: Structure) => {
-    setEditing(s); setFName(s.name); setFAmount(String(s.total_budget)); setShowForm(true)
+    setEditing(s); setFName(s.name); setFAmount(String(parseFloat(String(s.total_budget))||0)); setShowForm(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -116,8 +117,8 @@ export default function Structures() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {structures.map(s => {
-            const used = s.used_amount || 0
-            const total = s.total_budget || 0
+            const used = parseFloat(String(s.used_amount)) || 0
+            const total = parseFloat(String(s.total_budget)) || 0
             const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
             const available = total - used
             const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-green-500'

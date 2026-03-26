@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { X, Loader2 } from 'lucide-react'
+import { X, Loader2, TrendingUp } from 'lucide-react'
 import type { Project } from '@/pages/ProjectsList'
 
 const SCRUM_STAGES = [
@@ -36,6 +36,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
   const [testEnd, setTestEnd]       = useState('')
   const [plannedGL, setPlannedGL]   = useState('')
   const [goLive, setGoLive]         = useState('')
+  const [projectStart, setProjectStart] = useState('')
 
   useEffect(() => {
     if (project) {
@@ -44,13 +45,14 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
       setPriority(project.priority?.toString()||'')
       setProgress(project.progress||0); setStage(project.scrum_stage||'Backlog')
       setResp(project.responsible_id||'')
+      setProjectStart(project.project_start_date||'')
       setDevStart(project.dev_start_date||'')
       setGoLive(project.go_live_date||'')
       setPlannedGL(project.planned_go_live_date||'')
     } else {
       setName(''); setDesc(''); setClass('Proyecto'); setPriority('')
       setProgress(0); setStage('Backlog'); setResp('')
-      setDevStart(''); setDevEnd(''); setTestStart(''); setTestEnd('')
+      setProjectStart(''); setDevStart(''); setDevEnd(''); setTestStart(''); setTestEnd('')
       setPlannedGL(''); setGoLive('')
     }
   }, [project, open])
@@ -78,12 +80,14 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return toast.error('El nombre es requerido')
+    const autoProgress = (stage === 'Go Live' || stage === 'Completado') ? 100 : progress
     save.mutate({
       name: name.trim(), description, classification,
       priority: priority ? parseInt(priority) : null,
-      progress, scrum_stage: stage,
+      progress: autoProgress, scrum_stage: stage,
       responsible_id: responsible || null,
       portfolio_id: portfolioId,
+      project_start_date: projectStart||null,
       dev_start_date: devStart||null, dev_end_date: devEnd||null,
       test_start_date: testStart||null, test_end_date: testEnd||null,
       planned_go_live_date: plannedGL||null, go_live_date: goLive||null,
@@ -133,7 +137,11 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Etapa">
-              <select className={inputCls} value={stage} onChange={e=>setStage(e.target.value)}>
+              <select className={inputCls} value={stage} onChange={e=>{
+                const newStage = e.target.value
+                setStage(newStage)
+                if (newStage === 'Go Live' || newStage === 'Completado') setProgress(100)
+              }}>
                 {SCRUM_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
@@ -146,11 +154,36 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
           </div>
 
           <Field label={`Avance: ${progress}%`}>
-            <input type="range" min="0" max="100" value={progress} onChange={e=>setProgress(parseInt(e.target.value))}
-              className="w-full accent-primary"/>
+            <div className="flex items-center gap-2">
+              <input type="range" min="0" max="100" value={progress} onChange={e=>setProgress(parseInt(e.target.value))}
+                className="flex-1 accent-primary"/>
+              <button type="button" onClick={() => {
+                const start = projectStart || devStart
+                const end = goLive || plannedGL
+                if (!start || !end) {
+                  toast.error('Se necesita fecha de inicio y fecha de Go-Live para calcular')
+                  return
+                }
+                const startMs = new Date(start).getTime()
+                const endMs = new Date(end).getTime()
+                const today = Date.now()
+                let pct = 0
+                if (today >= endMs) pct = 100
+                else if (today <= startMs) pct = 0
+                else pct = Math.round(((today - startMs) / (endMs - startMs)) * 100)
+                setProgress(pct)
+                toast.success(`Avance calculado: ${pct}%`)
+              }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors whitespace-nowrap">
+                <TrendingUp className="h-3.5 w-3.5"/> Calcular
+              </button>
+            </div>
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Inicio proyecto">
+              <input className={inputCls} type="date" value={projectStart} onChange={e=>setProjectStart(e.target.value)}/>
+            </Field>
             <Field label="Inicio desarrollo">
               <input className={inputCls} type="date" value={devStart} onChange={e=>setDevStart(e.target.value)}/>
             </Field>

@@ -25,8 +25,10 @@ export const msalConfig: Configuration = {
   },
 }
 
+// Scopes para Microsoft Enterprise Application
+// GroupMember.Read.All permite leer los grupos del usuario para mapeo de roles
 export const loginRequest = {
-  scopes: ['openid', 'profile', 'email', 'User.Read'],
+  scopes: ['openid', 'profile', 'email', 'User.Read', 'GroupMember.Read.All'],
 }
 
 export const msalInstance = new PublicClientApplication(msalConfig)

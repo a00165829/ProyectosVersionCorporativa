@@ -13,6 +13,7 @@ interface AuthUser {
   role: AppRole
   modules: string[]
   companyIds: string[]
+  portfolioIds: string[]
 }
 
 interface AuthContextType {
@@ -42,11 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function loadUser() {
       try {
         if (DEV_MODE) {
-          // Modo desarrollo: usuario admin automático
           const me = await api.get<{ user: AuthUser }>('/api/auth/me')
           setUser(me.user)
+          // Store perms for PortfolioContext filtering
+          sessionStorage.setItem('user_perms', JSON.stringify({
+            companyIds: me.user.companyIds || [],
+            portfolioIds: me.user.portfolioIds || [],
+          }))
         } else if (accounts.length > 0) {
-          // Producción: obtener token de Azure AD y sincronizar con backend
+          // Producción: obtener token de Enterprise App y sincronizar con backend
           const result = await instance.acquireTokenSilent({
             ...loginRequest,
             account: accounts[0],
@@ -55,6 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await api.post('/api/auth/sync', {})
           const me = await api.get<{ user: AuthUser }>('/api/auth/me')
           setUser(me.user)
+          sessionStorage.setItem('user_perms', JSON.stringify({
+            companyIds: me.user.companyIds || [],
+            portfolioIds: me.user.portfolioIds || [],
+          }))
         }
       } catch (err) {
         console.error('Error cargando usuario:', err)
@@ -67,7 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [accounts, instance])
 
   const signIn = async () => {
-    if (DEV_MODE) return // En dev ya está logueado automáticamente
+    if (DEV_MODE) {
+      // En dev mode, recargar el usuario del backend (toma el rol del header X-Dev-Role)
+      try {
+        const me = await api.get<{ user: AuthUser }>('/api/auth/me')
+        setUser(me.user)
+      } catch (err) {
+        console.error('Error en dev signIn:', err)
+      }
+      return
+    }
     await instance.loginRedirect(loginRequest)
   }
 

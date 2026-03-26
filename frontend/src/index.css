@@ -1,50 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Alestra-inspired: navy + cyan + clean whites */
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221 83% 53%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --card-foreground: 215 25% 15%;
+    --primary: 210 100% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 15% 95%;
+    --secondary-foreground: 215 25% 20%;
+    --muted: 210 15% 95%;
+    --muted-foreground: 215 10% 50%;
+    --accent: 185 80% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 18% 90%;
+    --input: 210 18% 90%;
+    --ring: 210 100% 40%;
+    --radius: 0.625rem;
+
+    /* Sidebar dark navy */
+    --sidebar-bg: 215 45% 12%;
+    --sidebar-fg: 210 20% 85%;
+    --sidebar-muted: 215 30% 20%;
+    --sidebar-accent: 185 80% 50%;
+    --sidebar-border: 215 30% 18%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ── Sidebar dark theme ─────────────────────────────────────────────────── */
+.sidebar-dark {
+  background: hsl(var(--sidebar-bg));
+  color: hsl(var(--sidebar-fg));
+}
+
+.sidebar-dark .sidebar-header {
+  border-color: hsl(var(--sidebar-border));
+}
+
+.sidebar-dark .sidebar-nav-link {
+  color: hsl(var(--sidebar-fg));
+  transition: all 0.2s ease;
+}
+
+.sidebar-dark .sidebar-nav-link:hover {
+  background: hsl(var(--sidebar-muted));
+  color: hsl(0 0% 100%);
+}
+
+.sidebar-dark .sidebar-nav-link.active {
+  background: linear-gradient(135deg, hsl(var(--accent)), hsl(210 100% 45%));
+  color: hsl(0 0% 100%);
+  box-shadow: 0 2px 8px hsl(var(--accent) / 0.3);
+}
+
+.sidebar-dark .sidebar-section-label {
+  color: hsl(var(--sidebar-fg) / 0.5);
+}
+
+.sidebar-dark .sidebar-section-btn:hover .sidebar-section-label {
+  color: hsl(var(--sidebar-fg) / 0.8);
+}
+
+.sidebar-dark .sidebar-dropdown-trigger {
+  background: hsl(var(--sidebar-muted));
+  color: hsl(var(--sidebar-fg));
+  border: 1px solid hsl(var(--sidebar-border));
+}
+
+.sidebar-dark .sidebar-dropdown-trigger:hover {
+  background: hsl(215 30% 24%);
+}
+
+.sidebar-dark .sidebar-company-trigger {
+  background: hsl(var(--sidebar-muted));
+  border: 1px solid hsl(var(--sidebar-accent) / 0.3);
+  color: hsl(var(--sidebar-accent));
+}
+
+.sidebar-dark .sidebar-company-trigger:hover {
+  background: hsl(var(--sidebar-accent) / 0.1);
+  border-color: hsl(var(--sidebar-accent) / 0.5);
+}
+
+.sidebar-dark .sidebar-user-card {
+  background: hsl(var(--sidebar-muted));
+}
+
+.sidebar-dark .sidebar-user-avatar {
+  background: hsl(var(--sidebar-accent) / 0.15);
+  color: hsl(var(--sidebar-accent));
+}
+
+/* ── Enhanced card styles ───────────────────────────────────────────────── */
+.stat-card {
+  @apply bg-card border rounded-xl p-5 transition-all duration-200;
+  box-shadow: 0 1px 3px hsl(215 25% 15% / 0.04);
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px hsl(215 25% 15% / 0.08);
+  transform: translateY(-1px);
+}
+
+/* ── Table enhancements ─────────────────────────────────────────────────── */
+.data-table thead {
+  @apply bg-gradient-to-r from-muted/80 to-muted/40;
+}
+
+.data-table tbody tr {
+  @apply transition-colors duration-150;
+}
+
+.data-table tbody tr:hover {
+  @apply bg-primary/[0.03];
+}
+
+/* ── Progress bars with gradient ────────────────────────────────────────── */
+.progress-green { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.progress-blue  { background: linear-gradient(90deg, hsl(var(--accent)), hsl(210 100% 45%)); }
+.progress-amber { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.progress-red   { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+/* ── Smooth scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.35); }
+
+/* ── Sidebar scrollbar ──────────────────────────────────────────────────── */
+.sidebar-dark::-webkit-scrollbar-thumb { background: hsl(var(--sidebar-fg) / 0.15); }
+.sidebar-dark::-webkit-scrollbar-thumb:hover { background: hsl(var(--sidebar-fg) / 0.25); }
+
+/* ── Button transitions ─────────────────────────────────────────────────── */
+button, a { transition: all 0.15s ease; }
+
+/* ── Focus styles ───────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }

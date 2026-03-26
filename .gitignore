@@ -4,3 +4,10 @@ dist/
 .DS_Store
 *.log
 nginx/certs/
+*.zip
+postgres_data/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

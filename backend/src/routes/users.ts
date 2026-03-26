@@ -43,7 +43,7 @@ usersRouter.post('/invite', requireRole('admin'), async (req, res) => {
     return res.status(409).json({ error: 'Ya existe un usuario con ese correo' });
   }
 
-  // En producción aquí se enviaría un correo via Azure AD o nodemailer
+  // En producción los usuarios se crean automáticamente al hacer login con Enterprise App
   // Por ahora registra la invitación
   await pool.query(`
     INSERT INTO user_invitations (email, display_name, invited_by, status)
