@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useMsal } from '@azure/msal-react'
 import { loginRequest, DEV_MODE } from '@/lib/msal'
 import { api } from '@/lib/api'
-
+const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || ''
 export type AppRole = 'admin' | 'director' | 'gerente' | 'lider' | 'usuario' | 'pending'
 
 interface AuthUser {
@@ -53,10 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (accounts.length > 0) {
           // Producción: obtener token de Enterprise App y sincronizar con backend
           const result = await instance.acquireTokenSilent({
-            ...loginRequest,
-            account: accounts[0],
-          })
-          sessionStorage.setItem('msal_token', result.accessToken)
+  scopes: ['openid', 'profile', 'email'],
+  account: accounts[0],
+})
+sessionStorage.setItem('msal_token', result.idToken)
           await api.post('/api/auth/sync', {})
           const me = await api.get<{ user: AuthUser }>('/api/auth/me')
           setUser(me.user)
