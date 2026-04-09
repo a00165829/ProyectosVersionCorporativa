@@ -41,7 +41,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
   useEffect(() => {
     if (project) {
       setName(project.name); setDesc(project.description||'')
-      setClass(project.classification||'Proyecto')
+      setClass((project.classification as 'Proyecto'|'Mejora')||'Proyecto')
       setPriority(project.priority?.toString()||'')
       setProgress(project.progress||0); setStage(project.scrum_stage||'Backlog')
       setResp(project.responsible_id||'')
