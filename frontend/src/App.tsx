@@ -1,8 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MsalProvider } from '@azure/msal-react'
 import { Toaster } from 'sonner'
-import { msalInstance } from '@/lib/msal'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PortfolioProvider } from '@/context/PortfolioContext'
 import AppLayout from '@/components/layout/AppLayout'
@@ -88,15 +86,13 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <MsalProvider instance={msalInstance}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-            <Toaster richColors position="top-right" />
-          </AuthProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </MsalProvider>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+          <Toaster richColors position="top-right" />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
