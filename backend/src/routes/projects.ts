@@ -27,10 +27,11 @@ projectsRouter.get('/', async (req, res) => {
   }
 
   const result = await pool.query(`
-    SELECT p.*, s.name AS structure_name, pa.name AS responsible_name
+    SELECT p.*, s.name AS structure_name, pa.name AS responsible_name, rq.name AS requestor_name
     FROM projects p
     LEFT JOIN structures s ON s.id = p.structure_id
     LEFT JOIN participants pa ON pa.id = p.responsible_id
+    LEFT JOIN requestors rq ON rq.id = p.requestor_id
     WHERE p.portfolio_id = $1 AND p.deleted_at IS NULL${filter}
     ORDER BY p.priority ASC NULLS LAST, p.name
   `, params);
@@ -40,9 +41,10 @@ projectsRouter.get('/', async (req, res) => {
 // ── Detalle de proyecto ──────────────────────────────────────────────────────
 projectsRouter.get('/:id', async (req, res) => {
   const result = await pool.query(`
-    SELECT p.*, pa.name AS responsible_name
+    SELECT p.*, pa.name AS responsible_name, rq.name AS requestor_name
     FROM projects p
     LEFT JOIN participants pa ON pa.id = p.responsible_id
+    LEFT JOIN requestors rq ON rq.id = p.requestor_id
     WHERE p.id = $1 AND p.deleted_at IS NULL
   `, [req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
@@ -55,25 +57,21 @@ projectsRouter.get('/:id', async (req, res) => {
 });
 
 // ── Crear proyecto ───────────────────────────────────────────────────────────
-projectsRouter.post('/', requireRole('admin','director','gerente','lider'), async (req, res) => {
+projectsRouter.post('/', async (req, res) => {
   const { name, portfolio_id, structure_id, scrum_stage, description,
-    classification, priority, progress, responsible_id,
+    classification, priority, progress, responsible_id, requestor_id,
     project_start_date, dev_start_date, dev_end_date,
     test_start_date, test_end_date, go_live_date, planned_go_live_date } = req.body;
-
-  // Auto 100% cuando etapa = Go Live o Completado
-  const finalProgress = (scrum_stage === 'Go Live' || scrum_stage === 'Completado')
-    ? 100 : (progress || 0);
-
   const result = await pool.query(`
     INSERT INTO projects (name, portfolio_id, structure_id, scrum_stage, stage, description,
-      classification, priority, progress, responsible_id,
+      classification, priority, progress, responsible_id, requestor_id,
       project_start_date, dev_start_date, dev_end_date, test_start_date, test_end_date,
       go_live_date, planned_go_live_date, created_by)
-    VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+    VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
     RETURNING *
   `, [name, portfolio_id, structure_id, scrum_stage||'Backlog', description,
-      classification||'Proyecto', priority||null, finalProgress, responsible_id||null,
+      classification||'Proyecto', priority||null, progress||0, responsible_id||null,
+      requestor_id||null,
       project_start_date||null, dev_start_date||null, dev_end_date||null,
       test_start_date||null, test_end_date||null,
       go_live_date||null, planned_go_live_date||null, req.user!.id]);
@@ -83,7 +81,7 @@ projectsRouter.post('/', requireRole('admin','director','gerente','lider'), asyn
 // ── Actualizar proyecto ──────────────────────────────────────────────────────
 projectsRouter.put('/:id', requireRole('admin','director','gerente','lider'), async (req, res) => {
   const { name, scrum_stage, description, classification, priority, progress,
-    responsible_id, project_start_date, dev_start_date, dev_end_date,
+    responsible_id, requestor_id, project_start_date, dev_start_date, dev_end_date,
     test_start_date, test_end_date, go_live_date, planned_go_live_date, structure_id } = req.body;
 
   // Lider solo puede editar sus propios proyectos
@@ -102,15 +100,15 @@ projectsRouter.put('/:id', requireRole('admin','director','gerente','lider'), as
     UPDATE projects SET
       name=$1, scrum_stage=COALESCE($2,scrum_stage), stage=COALESCE($2,stage),
       description=COALESCE($3,description), classification=COALESCE($4,classification),
-      priority=$5, progress=COALESCE($6,progress), responsible_id=$7,
-      project_start_date=COALESCE($8,project_start_date), dev_start_date=COALESCE($9,dev_start_date),
-      dev_end_date=COALESCE($10,dev_end_date), test_start_date=COALESCE($11,test_start_date),
-      test_end_date=COALESCE($12,test_end_date), go_live_date=COALESCE($13,go_live_date),
-      planned_go_live_date=COALESCE($14,planned_go_live_date),
-      structure_id=COALESCE($15,structure_id), updated_at=now()
-    WHERE id=$16 AND deleted_at IS NULL RETURNING *
+      priority=$5, progress=COALESCE($6,progress), responsible_id=$7, requestor_id=$8,
+      project_start_date=COALESCE($9,project_start_date), dev_start_date=COALESCE($10,dev_start_date),
+      dev_end_date=COALESCE($11,dev_end_date), test_start_date=COALESCE($12,test_start_date),
+      test_end_date=COALESCE($13,test_end_date), go_live_date=COALESCE($14,go_live_date),
+      planned_go_live_date=COALESCE($15,planned_go_live_date),
+      structure_id=COALESCE($16,structure_id), updated_at=now()
+    WHERE id=$17 AND deleted_at IS NULL RETURNING *
   `, [name, scrum_stage, description, classification, priority??null, finalProgress,
-      responsible_id??null, project_start_date, dev_start_date, dev_end_date,
+      responsible_id??null, requestor_id??null, project_start_date, dev_start_date, dev_end_date,
       test_start_date, test_end_date, go_live_date, planned_go_live_date,
       structure_id, req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });

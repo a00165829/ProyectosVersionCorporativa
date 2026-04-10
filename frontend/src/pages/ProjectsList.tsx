@@ -15,10 +15,12 @@ export interface Project {
   description: string; dev_start_date: string | null
   planned_go_live_date: string | null; go_live_date: string | null
   progress: number; classification: string; priority: number | null
-  responsible_name: string | null; portfolio_id: string
+  responsible_name: string | null; responsible_id: string | null
+  requestor_id: string | null; requestor_name: string | null
+  portfolio_id: string
   dev_end_date: string | null; test_start_date: string | null
   test_end_date: string | null; project_start_date: string | null
-  deleted_at: string | null; responsible_id?: string
+  deleted_at: string | null
 }
 
 const STAGE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {

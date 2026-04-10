@@ -30,6 +30,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
   const [progress, setProgress]     = useState(0)
   const [stage, setStage]           = useState('Backlog')
   const [responsible, setResp]      = useState('')
+  const [requestor, setRequestor]   = useState('')
   const [devStart, setDevStart]     = useState('')
   const [devEnd, setDevEnd]         = useState('')
   const [testStart, setTestStart]   = useState('')
@@ -45,17 +46,24 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
       setPriority(project.priority?.toString()||'')
       setProgress(project.progress||0); setStage(project.scrum_stage||'Backlog')
       setResp(project.responsible_id||'')
+      setRequestor(project.requestor_id||'')
       setProjectStart(project.project_start_date||'')
       setDevStart(project.dev_start_date||'')
       setGoLive(project.go_live_date||'')
       setPlannedGL(project.planned_go_live_date||'')
     } else {
       setName(''); setDesc(''); setClass('Proyecto'); setPriority('')
-      setProgress(0); setStage('Backlog'); setResp('')
+      setProgress(0); setStage('Backlog'); setResp(''); setRequestor('')
       setProjectStart(''); setDevStart(''); setDevEnd(''); setTestStart(''); setTestEnd('')
       setPlannedGL(''); setGoLive('')
     }
   }, [project, open])
+
+  const { data: requestors=[] } = useQuery<{id:string;name:string}[]>({
+    queryKey: ['requestors-list'],
+    queryFn: () => api.get('/api/requestors'),
+    enabled: open,
+  })
 
   const { data: participants=[] } = useQuery<Participant[]>({
     queryKey: ['participants-list'],
@@ -86,6 +94,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
       priority: priority ? parseInt(priority) : null,
       progress: autoProgress, scrum_stage: stage,
       responsible_id: responsible || null,
+      requestor_id: requestor || null,
       portfolio_id: portfolioId,
       project_start_date: projectStart||null,
       dev_start_date: devStart||null, dev_end_date: devEnd||null,
@@ -149,6 +158,15 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
               <select className={inputCls} value={responsible} onChange={e=>setResp(e.target.value)}>
                 <option value="">Sin asignar</option>
                 {participants.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Solicitante">
+              <select className={inputCls} value={requestor} onChange={e=>setRequestor(e.target.value)}>
+                <option value="">Sin asignar</option>
+                {requestors.map((r: any)=><option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </Field>
           </div>

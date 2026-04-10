@@ -23,6 +23,8 @@ import { menuConfigRouter }   from './routes/menuConfig';
 import { permissionsRouter }  from './routes/permissions';
 import { errorHandler }       from './middleware/errorHandler';
 import { pool }               from './db/pool';
+import { requestorsRouter }  from './routes/requestors';
+
 
 dotenv.config();
 
@@ -44,6 +46,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+app.use('/api/requestors',    requestorsRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
