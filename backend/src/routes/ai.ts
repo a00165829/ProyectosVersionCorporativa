@@ -7,7 +7,7 @@ aiRouter.use(requireAuth);
 
 const AI_BASE_URL = process.env.AXTEL_AI_URL || 'https://axiaproxy-dnajdmfmftbqdued.eastus2-01.azurewebsites.net';
 const AI_API_KEY = process.env.AXTEL_AI_KEY || '';
-const AI_MODEL = process.env.AXTEL_AI_MODEL || 'gpt-5.3-chat';
+const AI_MODEL = process.env.AXTEL_AI_MODEL || 'claude-sonnet-4-6';
 
 // ── Obtener datos del portal segun permisos del usuario ───────────────────────
 async function getContextForUser(userId: string, role: string) {
@@ -76,7 +76,7 @@ aiRouter.post('/chat', async (req, res) => {
       `${b.structure_name}|Aut:$${Number(b.authorized||0).toLocaleString()}|Ej:$${Number(b.exercised||0).toLocaleString()}|Disp:$${Number(b.available||0).toLocaleString()}`
     ).join('\n');
 
-    const systemPrompt = `Eres el asistente del PMO Portal de AXTEL. Responde en espanol, conciso.
+    const systemContent = `Eres el asistente del PMO Portal de AXTEL. Responde en espanol, conciso.
 Usuario: ${req.user!.name} (${req.user!.role}).
 
 PROYECTOS (nombre|portafolio|etapa|avance|tipo|lider|solicitante|go-live|real):
@@ -86,11 +86,22 @@ ${budgetLines ? `PRESUPUESTO:\n${budgetLines}` : ''}
 
 Reglas: solo usa datos del contexto. No inventes. Se conciso.`;
 
+    // Para Claude via proxy, enviar contexto como primer mensaje de usuario
+    // ya que algunos proxies no soportan el role "system"
     const messages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `[INSTRUCCIONES DEL SISTEMA]\n${systemContent}\n[FIN INSTRUCCIONES]\n\nResponde "Entendido" para confirmar.` },
+      { role: 'assistant', content: 'Entendido. Soy el asistente del PMO Portal. Tengo los datos de los proyectos cargados. ¿En que puedo ayudarte?' },
       ...history.slice(-6).map((h: any) => ({ role: h.role, content: h.content })),
       { role: 'user', content: message },
     ];
+
+    const requestBody = {
+      model: AI_MODEL,
+      messages,
+      max_tokens: 1000,
+    };
+
+    console.log('AI request:', JSON.stringify({ model: AI_MODEL, messageCount: messages.length, promptLength: JSON.stringify(requestBody).length }));
 
     const aiResponse = await fetch(`${AI_BASE_URL}/api/v1/chat/completions`, {
       method: 'POST',
@@ -98,23 +109,28 @@ Reglas: solo usa datos del contexto. No inventes. Se conciso.`;
         'api-key': AI_API_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages,
-        max_tokens: 1000,
-        temperature: 0.3,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
-    const data: any = await aiResponse.json();
+    const responseText = await aiResponse.text();
+    console.log('AI response status:', aiResponse.status, 'body length:', responseText.length);
+
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      console.error('AI response not JSON:', responseText.substring(0, 500));
+      return res.status(502).json({ error: 'Respuesta invalida del servicio de IA.' });
+    }
+
     const reply = data.choices?.[0]?.message?.content;
 
     if (reply && reply.trim()) {
       return res.json({ reply, model: AI_MODEL });
     }
 
-    console.error('Axtel AI empty response:', aiResponse.status, JSON.stringify(data));
-    return res.status(502).json({ error: 'El modelo no genero respuesta. Intenta con una pregunta mas corta.' });
+    console.error('Axtel AI empty response:', aiResponse.status, responseText.substring(0, 500));
+    return res.status(502).json({ error: 'El modelo no genero respuesta. Intenta de nuevo.' });
 
   } catch (err: any) {
     console.error('AI chat error:', err);
