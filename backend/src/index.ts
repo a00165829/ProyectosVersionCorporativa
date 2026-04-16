@@ -24,7 +24,7 @@ import { permissionsRouter }  from './routes/permissions';
 import { errorHandler }       from './middleware/errorHandler';
 import { pool }               from './db/pool';
 import { requestorsRouter }  from './routes/requestors';
-
+import { aiRouter }          from './routes/ai';
 
 dotenv.config();
 
@@ -47,6 +47,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use('/api/requestors',    requestorsRouter);
+app.use('/api/ai',            aiRouter);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {

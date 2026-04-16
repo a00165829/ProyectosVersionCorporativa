@@ -26,10 +26,11 @@ const DEFAULT_MENUS = [
   { module_id: 'activities',     label: 'Catálogo',           href: '/admin/activities',   icon: 'ListChecks',  section: 'administracion', sort_order: 0 },
   { module_id: 'users',          label: 'Usuarios',           href: '/admin/users',        icon: 'Users',       section: 'administracion', sort_order: 1 },
   { module_id: 'participants',   label: 'Líderes',            href: '/admin/participants', icon: 'UserCheck',   section: 'administracion', sort_order: 2 },
-  { module_id: 'resources',      label: 'Recursos',           href: '/admin/resources',    icon: 'HardDrive',   section: 'administracion', sort_order: 3 },
-  { module_id: 'edit-menus',     label: 'Editar Menús',       href: '/admin/menus',        icon: 'Settings',    section: 'administracion', sort_order: 4 },
-  { module_id: 'trash',          label: 'Papelera',           href: '/admin/trash',        icon: 'Trash2',      section: 'administracion', sort_order: 5 },
-  { module_id: 'companies',      label: 'Empresas',           href: '/admin/companies',    icon: 'Briefcase',   section: 'administracion', sort_order: 6 },
+  { module_id: 'requestors',     label: 'Solicitantes',       href: '/admin/requestors',   icon: 'UserCheck',   section: 'administracion', sort_order: 3 },
+  { module_id: 'resources',      label: 'Recursos',           href: '/admin/resources',    icon: 'HardDrive',   section: 'administracion', sort_order: 4 },
+  { module_id: 'companies',      label: 'Empresas',           href: '/admin/companies',    icon: 'Briefcase',   section: 'administracion', sort_order: 5 },
+  { module_id: 'edit-menus',     label: 'Editar Menús',       href: '/admin/menus',        icon: 'Settings',    section: 'administracion', sort_order: 6 },
+  { module_id: 'trash',          label: 'Papelera',           href: '/admin/trash',        icon: 'Trash2',      section: 'administracion', sort_order: 7 },
 ];
 
 // GET /api/menu-config — returns current menu structure

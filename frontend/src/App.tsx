@@ -27,6 +27,7 @@ import CompaniesCatalog from '@/pages/CompaniesCatalog'
 import RequestorsCatalog from '@/pages/RequestorsCatalog'
 import Trash from '@/pages/Trash'
 import EditMenus from '@/pages/EditMenus'
+import AiChat from '@/components/ai/AiChat'
 import { Loader2 } from 'lucide-react'
 
 const queryClient = new QueryClient({
@@ -82,6 +83,7 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppLayout>
+      <AiChat />
     </PortfolioProvider>
   )
 }
