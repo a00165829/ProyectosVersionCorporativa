@@ -61,8 +61,8 @@ function pColor(p: number) {
 export default function Dashboard() {
   const { user } = useAuth()
   const { activePortfolioId, activePortfolio } = usePortfolio()
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sortKey, setSortKey] = useState<SortKey>('progress')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [search, setSearch] = useState('')
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
