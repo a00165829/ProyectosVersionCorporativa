@@ -39,7 +39,9 @@ function ProgressBar({ value }: { value: number }) {
   )
 }
 
-const fmt = (d:string|null) => d ? new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : '—'
+// Fix timezone: para fechas tipo "2026-04-04" agregar T12:00:00 para evitar desfase de dia
+const parseDate = (d: string) => d.length === 10 ? new Date(d + 'T12:00:00') : new Date(d)
+const fmt = (d:string|null) => d ? parseDate(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : '—'
 const fmtDT = (d:string) => new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
 
 export default function ProjectDetail() {

@@ -32,8 +32,9 @@ const STAGE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
   'Por Iniciar':       { bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-400' },
 }
 
+const parseDate = (d: string) => d.length === 10 ? new Date(d + 'T12:00:00') : new Date(d)
 const fmt = (d: string | null) => d
-  ? new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+  ? parseDate(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
   : '—'
 
 type SortKey = 'name' | 'classification' | 'responsible_name' | 'scrum_stage' | 'progress' | 'planned_go_live_date' | 'go_live_date'

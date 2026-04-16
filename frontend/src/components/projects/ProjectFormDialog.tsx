@@ -19,18 +19,16 @@ interface Props {
 
 interface Participant { id: string; name: string }
 
-// Convierte cualquier formato de fecha (ISO, Date, etc.) a YYYY-MM-DD para inputs type="date"
+// Convierte cualquier formato de fecha a YYYY-MM-DD para inputs type="date"
+// Agrega T12:00:00 para evitar desfase de timezone
 function toDateInput(value: string | null | undefined): string {
   if (!value) return ''
   // Si ya viene en formato YYYY-MM-DD, usarlo tal cual
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  // Si viene como ISO completo, extraer solo la fecha
-  const d = new Date(value)
-  if (isNaN(d.getTime())) return ''
-  const year = d.getUTCFullYear()
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(d.getUTCDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  // Si viene como ISO completo, parsear con hora fija para evitar desfase
+  const dateStr = value.substring(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+  return ''
 }
 
 export default function ProjectFormDialog({ open, onOpenChange, project, portfolioId }: Props) {
