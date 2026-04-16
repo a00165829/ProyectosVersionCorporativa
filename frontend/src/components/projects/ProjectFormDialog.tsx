@@ -19,6 +19,20 @@ interface Props {
 
 interface Participant { id: string; name: string }
 
+// Convierte cualquier formato de fecha (ISO, Date, etc.) a YYYY-MM-DD para inputs type="date"
+function toDateInput(value: string | null | undefined): string {
+  if (!value) return ''
+  // Si ya viene en formato YYYY-MM-DD, usarlo tal cual
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  // Si viene como ISO completo, extraer solo la fecha
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return ''
+  const year = d.getUTCFullYear()
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function ProjectFormDialog({ open, onOpenChange, project, portfolioId }: Props) {
   const qc = useQueryClient()
   const isEdit = !!project
@@ -47,10 +61,13 @@ export default function ProjectFormDialog({ open, onOpenChange, project, portfol
       setProgress(project.progress||0); setStage(project.scrum_stage||'Backlog')
       setResp(project.responsible_id||'')
       setRequestor(project.requestor_id||'')
-      setProjectStart(project.project_start_date||'')
-      setDevStart(project.dev_start_date||'')
-      setGoLive(project.go_live_date||'')
-      setPlannedGL(project.planned_go_live_date||'')
+      setProjectStart(toDateInput(project.project_start_date))
+      setDevStart(toDateInput(project.dev_start_date))
+      setDevEnd(toDateInput(project.dev_end_date))
+      setTestStart(toDateInput(project.test_start_date))
+      setTestEnd(toDateInput(project.test_end_date))
+      setPlannedGL(toDateInput(project.planned_go_live_date))
+      setGoLive(toDateInput(project.go_live_date))
     } else {
       setName(''); setDesc(''); setClass('Proyecto'); setPriority('')
       setProgress(0); setStage('Backlog'); setResp(''); setRequestor('')
