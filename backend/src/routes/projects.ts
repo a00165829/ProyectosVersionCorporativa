@@ -14,7 +14,6 @@ projectsRouter.get('/participants/list', async (_req, res) => {
 });
 
 // ── Listar proyectos ─────────────────────────────────────────────────────────
-// Lider solo ve proyectos que él creó
 projectsRouter.get('/', async (req, res) => {
   const { portfolio_id } = req.query;
   const isLider = req.user!.role === 'lider';
@@ -78,6 +77,12 @@ projectsRouter.post('/', async (req, res) => {
   res.status(201).json(result.rows[0]);
 });
 
+// Helper: convierte string vacio a null para fechas
+function dateOrNull(v: any): string | null {
+  if (!v || v === '') return null;
+  return v;
+}
+
 // ── Actualizar proyecto ──────────────────────────────────────────────────────
 projectsRouter.put('/:id', requireRole('admin','director','gerente','lider'), async (req, res) => {
   const { name, scrum_stage, description, classification, priority, progress,
@@ -98,18 +103,30 @@ projectsRouter.put('/:id', requireRole('admin','director','gerente','lider'), as
 
   const result = await pool.query(`
     UPDATE projects SET
-      name=$1, scrum_stage=COALESCE($2,scrum_stage), stage=COALESCE($2,stage),
-      description=COALESCE($3,description), classification=COALESCE($4,classification),
-      priority=$5, progress=COALESCE($6,progress), responsible_id=$7, requestor_id=$8,
-      project_start_date=COALESCE($9,project_start_date), dev_start_date=COALESCE($10,dev_start_date),
-      dev_end_date=COALESCE($11,dev_end_date), test_start_date=COALESCE($12,test_start_date),
-      test_end_date=COALESCE($13,test_end_date), go_live_date=COALESCE($14,go_live_date),
-      planned_go_live_date=COALESCE($15,planned_go_live_date),
-      structure_id=COALESCE($16,structure_id), updated_at=now()
-    WHERE id=$17 AND deleted_at IS NULL RETURNING *
+      name = COALESCE($1, name),
+      scrum_stage = COALESCE($2, scrum_stage),
+      stage = COALESCE($2, stage),
+      description = COALESCE($3, description),
+      classification = COALESCE($4, classification),
+      priority = $5,
+      progress = COALESCE($6, progress),
+      responsible_id = $7,
+      requestor_id = $8,
+      project_start_date = $9,
+      dev_start_date = $10,
+      dev_end_date = $11,
+      test_start_date = $12,
+      test_end_date = $13,
+      go_live_date = $14,
+      planned_go_live_date = $15,
+      structure_id = COALESCE($16, structure_id),
+      updated_at = now()
+    WHERE id = $17 AND deleted_at IS NULL RETURNING *
   `, [name, scrum_stage, description, classification, priority??null, finalProgress,
-      responsible_id??null, requestor_id??null, project_start_date, dev_start_date, dev_end_date,
-      test_start_date, test_end_date, go_live_date, planned_go_live_date,
+      responsible_id??null, requestor_id??null,
+      dateOrNull(project_start_date), dateOrNull(dev_start_date), dateOrNull(dev_end_date),
+      dateOrNull(test_start_date), dateOrNull(test_end_date),
+      dateOrNull(go_live_date), dateOrNull(planned_go_live_date),
       structure_id, req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
   res.json(result.rows[0]);
@@ -125,7 +142,6 @@ projectsRouter.delete('/:id', requireRole('admin','director','gerente','lider'),
   }
   await pool.query('UPDATE projects SET deleted_at=now() WHERE id=$1', [req.params.id]);
   res.json({ success: true });
-
 });
 
 // ── Comentarios ──────────────────────────────────────────────────────────────
@@ -172,9 +188,8 @@ projectsRouter.get('/:id/status-history', async (req, res) => {
 
 projectsRouter.post('/:id/status-history', async (req, res) => {
   const { description, stage, notes } = req.body;
-  if (!description?.trim()) return res.status(400).json({ error: 'Descripción requerida' });
+  if (!description?.trim()) return res.status(400).json({ error: 'Descripcion requerida' });
 
-  // Si se cambia de etapa, actualizar también el proyecto
   if (stage) {
     const isComplete = stage === 'Go Live' || stage === 'Completado';
     if (isComplete) {
