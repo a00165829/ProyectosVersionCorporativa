@@ -1,64 +1,171 @@
 @echo off
-echo ========================================
-echo  PMO Portal - Deploy a produccion
-echo ========================================
-echo.
+REM ========================================
+REM DEPLOY PMO PORTAL - CON FIX DE FECHAS
+REM Automatiza el proceso completo de deployment
+REM ========================================
+
+echo ==========================================
+echo 🚀 INICIANDO DEPLOYMENT PMO PORTAL
+echo ==========================================
 
 if "%~1"=="" (
-    echo ERROR: Falta el mensaje de commit
-    echo Uso: deploy.bat "descripcion del cambio"
-    echo Ejemplo: deploy.bat "feat: nuevo catalogo de solicitantes"
+    echo ❌ Error: Debe proporcionar un mensaje de commit
+    echo Uso: deploy.bat "mensaje del commit"
     pause
     exit /b 1
 )
 
-echo [1/5] Commit a GitHub...
+set COMMIT_MESSAGE=%~1
+set TIMESTAMP=%date:~-4,4%-%date:~-10,2%-%date:~-7,2%_%time:~0,2%-%time:~3,2%-%time:~6,2%
+set TIMESTAMP=%TIMESTAMP: =0%
+
+echo 📝 Commit message: %COMMIT_MESSAGE%
+echo 🕐 Timestamp: %TIMESTAMP%
+echo.
+
+REM ========================================
+REM 1. VERIFICAR ESTADO DEL REPOSITORIO
+REM ========================================
+
+echo 🔍 1. Verificando estado del repositorio...
+git status
+
+echo.
+echo ¿Continuar con el deployment? (Y/N)
+set /p CONFIRM=
+if /i not "%CONFIRM%"=="Y" (
+    echo ❌ Deployment cancelado
+    pause
+    exit /b 0
+)
+
+REM ========================================
+REM 2. COMMIT Y PUSH
+REM ========================================
+
+echo.
+echo 📦 2. Haciendo commit y push...
 git add .
-git commit -m "%~1"
-git push --force origin main
-if errorlevel 1 (
-    echo ERROR en Git push. Verifica tu conexion.
+git commit -m "%COMMIT_MESSAGE% - %TIMESTAMP%"
+
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Error en git commit
     pause
     exit /b 1
 )
 
-echo.
-echo [2/5] Docker build...
-docker build --no-cache --build-arg VITE_AZURE_TENANT_ID=f3134160-5a73-4fa3-800f-2c274653fae1 --build-arg VITE_AZURE_CLIENT_ID=62489a58-204b-4522-a91e-0967dcb6a436 --build-arg VITE_API_URL="" -t axitapppmo.azurecr.io/pmo-portal:latest .
-if errorlevel 1 (
-    echo ERROR en Docker build. Revisa los errores arriba.
+git push origin main
+
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Error en git push
     pause
     exit /b 1
 )
 
+echo ✅ Código subido a GitHub exitosamente
+
+REM ========================================
+REM 3. AZURE CONTAINER REGISTRY BUILD
+REM ========================================
+
 echo.
-echo [3/5] Docker push a Azure Container Registry...
-docker push axitapppmo.azurecr.io/pmo-portal:latest
-if errorlevel 1 (
-    echo ERROR en Docker push. Verifica login: az acr login --name axitapppmo
+echo 🐳 3. Iniciando build en Azure Container Registry...
+
+az acr build --registry axtelitacr --image pmo-portal:latest --image pmo-portal:%TIMESTAMP% .
+
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Error en Azure Container Registry build
     pause
     exit /b 1
 )
 
+echo ✅ Imagen Docker creada exitosamente
+
+REM ========================================
+REM 4. RESTART AZURE WEB APP
+REM ========================================
+
 echo.
-echo [4/5] Reiniciando Web App en Azure...
-az webapp restart --name pmo-app-prod --resource-group pmo-portal-rg
-if errorlevel 1 (
-    echo AVISO: No se pudo reiniciar automaticamente.
-    echo Reinicia manualmente desde Azure Portal.
-    echo O instala Azure CLI: winget install Microsoft.AzureCLI
+echo 🔄 4. Reiniciando Azure Web App...
+
+az webapp restart --name proyectosit --resource-group AXTEL_IT_RG
+
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Error al reiniciar Web App
+    echo ℹ️  La aplicación puede seguir funcionando con la imagen anterior
+    pause
+    exit /b 1
+)
+
+echo ✅ Web App reiniciada exitosamente
+
+REM ========================================
+REM 5. VERIFICACIÓN DE DEPLOYMENT
+REM ========================================
+
+echo.
+echo 🧪 5. Verificando deployment...
+echo.
+echo 🌐 URL: https://proyectosit.axtel.com.mx
+echo.
+echo Verificaciones automáticas:
+echo - ✅ Código commitado y subido a GitHub
+echo - ✅ Imagen Docker buildeada en Azure Container Registry  
+echo - ✅ Azure Web App reiniciada
+echo.
+
+REM Verificar que el sitio responda
+echo 🔍 Probando conectividad...
+curl -s -o nul -w "%%{http_code}" https://proyectosit.axtel.com.mx > temp_status.txt
+set /p HTTP_STATUS=<temp_status.txt
+del temp_status.txt
+
+if "%HTTP_STATUS%"=="200" (
+    echo ✅ Sitio web respondiendo correctamente (HTTP %HTTP_STATUS%^)
+) else (
+    echo ⚠️  Sitio web respondiendo con código: %HTTP_STATUS%
+    echo ℹ️  Puede tomar unos minutos en cargar completamente
+)
+
+REM ========================================
+REM 6. RESUMEN Y SIGUIENTES PASOS
+REM ========================================
+
+echo.
+echo ==========================================
+echo ✅ DEPLOYMENT COMPLETADO EXITOSAMENTE
+echo ==========================================
+echo.
+echo 📊 Resumen:
+echo   • Commit: %COMMIT_MESSAGE%
+echo   • Timestamp: %TIMESTAMP%
+echo   • Imagen Docker: axtelitacr.azurecr.io/pmo-portal:latest
+echo   • URL: https://proyectosit.axtel.com.mx
+echo.
+echo 📋 Siguientes pasos:
+echo   1. Verificar que la aplicación funcione correctamente
+echo   2. Probar las fechas en modo edición y lectura
+echo   3. Confirmar que no se requiere Shift+F5 para ver cambios
+echo   4. Validar que las fechas sean consistentes entre modos
+echo.
+echo 🔧 En caso de problemas:
+echo   • Revisar logs: az webapp log tail --name proyectosit --resource-group AXTEL_IT_RG
+echo   • Verificar variables de entorno en Azure Portal
+echo   • Comprobar que VITE_API_URL esté configurada correctamente
+echo.
+
+REM ========================================
+REM 7. LOGS OPCIONALES
+REM ========================================
+
+echo ¿Desea ver los logs en tiempo real? (Y/N)
+set /p SHOW_LOGS=
+if /i "%SHOW_LOGS%"=="Y" (
+    echo.
+    echo 📋 Mostrando logs en tiempo real (Ctrl+C para salir)...
+    az webapp log tail --name proyectosit --resource-group AXTEL_IT_RG
 )
 
 echo.
-echo [5/5] Listo!
-echo ========================================
-echo  Deploy completado exitosamente
-echo  Commit: %~1
-echo  Imagen: axitapppmo.azurecr.io/pmo-portal:latest
-echo  Web App: pmo-app-prod
-echo ========================================
-echo.
-echo Espera 1-2 minutos y abre:
-echo https://proyectosit.axtel.com.mx
-echo.
+echo 🎉 ¡Deployment completado!
 pause

@@ -1,126 +1,267 @@
+// ========================================
+// API CONFIGURATION - PMO PORTAL
+// Fix para detección automática de API_URL
+// ========================================
+
 /**
- * Configuración inteligente del API_URL que funciona en:
- * - Desarrollo local (localhost:5173)
- * - Producción Azure (proyectosit.axtel.com.mx)
- * - Build environments
+ * Detecta automáticamente la URL de la API basada en el entorno
+ * Prioridad: VITE_API_URL > window.location.origin > localhost
  */
-
-const getApiUrl = (): string => {
-  // 1. Override manual para debug (solo en desarrollo)
-  if (typeof window !== 'undefined') {
-    const override = localStorage.getItem('API_URL_OVERRIDE');
-    if (override && import.meta.env.DEV) {
-      console.log('🔧 Usando API_URL override:', override);
-      return override;
-    }
-  }
-
-  // 2. Variable de entorno (funciona en build time)
+const getAPIURL = (): string => {
+  // 1. Prioridad: Variable de entorno (para producción)
   if (import.meta.env.VITE_API_URL) {
-    console.log('📦 Usando VITE_API_URL:', import.meta.env.VITE_API_URL);
+    console.log('🔧 API_URL desde VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
-
-  // 3. Detección automática según el hostname
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    
-    // Producción Azure - mismo dominio para frontend y backend
-    if (hostname === 'proyectosit.axtel.com.mx') {
-      console.log('🏢 Modo producción Azure detectado');
-      return `https://${hostname}`;
-    }
-    
-    // Otros dominios de producción (si tienes múltiples)
-    if (hostname.endsWith('.azurewebsites.net')) {
-      console.log('☁️ Azure Web App detectado');
-      return `https://${hostname}`;
-    }
+  
+  // 2. Si estamos en el navegador, usar el origin actual
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    console.log('🔧 API_URL desde window.location.origin:', origin);
+    return origin;
   }
-
-  // 4. Fallback para desarrollo local
-  console.log('🏠 Usando API_URL de desarrollo local');
-  return 'http://localhost:3000';
+  
+  // 3. Fallback para desarrollo
+  const fallback = 'http://localhost:3000';
+  console.log('🔧 API_URL usando fallback:', fallback);
+  return fallback;
 };
 
-// Exportar la URL configurada
-export const API_URL = getApiUrl();
-
-// Log de configuración para debug
-console.log('🌐 API_URL configurado:', API_URL);
-console.log('🔍 Environment:', {
-  NODE_ENV: import.meta.env.MODE,
-  VITE_API_URL: import.meta.env.VITE_API_URL,
-  hostname: typeof window !== 'undefined' ? window.location.hostname : 'SSR'
-});
-
-/**
- * Helper para hacer fetch con configuración automática
- */
-export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
-  const url = `${API_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
-  
-  const defaultHeaders = {
+// ✅ CONFIGURACIÓN GLOBAL
+export const API_CONFIG = {
+  BASE_URL: getAPIURL(),
+  ENDPOINTS: {
+    PROJECTS: '/api/projects',
+    COMPANIES: '/api/companies',
+    PORTFOLIOS: '/api/portfolios',
+    PROFILES: '/api/profiles',
+    AUTH: '/api/auth'
+  },
+  HEADERS: {
     'Content-Type': 'application/json',
-    ...options.headers,
-  };
-
-  // Agregar token automáticamente si existe
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  if (token) {
-    defaultHeaders['Authorization'] = `Bearer ${token}`;
+    'Accept': 'application/json'
   }
+} as const;
 
-  console.log(`📡 ${options.method || 'GET'} ${url}`);
-
-  const response = await fetch(url, {
-    ...options,
-    headers: defaultHeaders,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`❌ API Error ${response.status}:`, errorText);
-    throw new Error(`API Error ${response.status}: ${errorText}`);
-  }
-
-  return response;
+/**
+ * Helper para construir URLs de API completas
+ */
+export const buildAPIURL = (endpoint: string): string => {
+  const baseURL = API_CONFIG.BASE_URL;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${baseURL}${cleanEndpoint}`;
 };
 
 /**
- * Helpers específicos para proyectos
+ * Wrapper para fetch con configuración automática
  */
-export const projectsApi = {
-  // Obtener todos los proyectos
-  getAll: () => apiRequest('/api/projects'),
-  
-  // Obtener un proyecto específico
-  getById: (id: string | number) => apiRequest(`/api/projects/${id}`),
-  
-  // Actualizar un proyecto
-  update: (id: string | number, data: any) => 
-    apiRequest(`/api/projects/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  
-  // Crear un proyecto
-  create: (data: any) =>
-    apiRequest('/api/projects', {
+export const apiClient = {
+  async get(endpoint: string, options: RequestInit = {}) {
+    const url = buildAPIURL(endpoint);
+    console.log('🔍 GET:', url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: API_CONFIG.HEADERS,
+      ...options
+    });
+    
+    console.log('📡 GET Response:', response.status, url);
+    return response;
+  },
+
+  async post(endpoint: string, data: any, options: RequestInit = {}) {
+    const url = buildAPIURL(endpoint);
+    console.log('🔍 POST:', url, data);
+    
+    const response = await fetch(url, {
       method: 'POST',
+      headers: API_CONFIG.HEADERS,
       body: JSON.stringify(data),
-    }),
-  
-  // Eliminar un proyecto
-  delete: (id: string | number) =>
-    apiRequest(`/api/projects/${id}`, {
+      ...options
+    });
+    
+    console.log('📡 POST Response:', response.status, url);
+    return response;
+  },
+
+  async put(endpoint: string, data: any, options: RequestInit = {}) {
+    const url = buildAPIURL(endpoint);
+    console.log('🔍 PUT:', url, data);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: API_CONFIG.HEADERS,
+      body: JSON.stringify(data),
+      ...options
+    });
+    
+    console.log('📡 PUT Response:', response.status, url);
+    return response;
+  },
+
+  async delete(endpoint: string, options: RequestInit = {}) {
+    const url = buildAPIURL(endpoint);
+    console.log('🔍 DELETE:', url);
+    
+    const response = await fetch(url, {
       method: 'DELETE',
-    }),
+      headers: API_CONFIG.HEADERS,
+      ...options
+    });
+    
+    console.log('📡 DELETE Response:', response.status, url);
+    return response;
+  }
 };
 
-// Export default para compatibilidad
-export default {
-  API_URL,
-  apiRequest,
-  projectsApi,
+// ========================================
+// FUNCIONES ESPECÍFICAS PARA PROYECTOS
+// ========================================
+
+export const projectAPI = {
+  /**
+   * Obtener todos los proyectos
+   */
+  async getAll() {
+    const response = await apiClient.get(API_CONFIG.ENDPOINTS.PROJECTS);
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * Obtener un proyecto por ID
+   */
+  async getById(id: string | number) {
+    const response = await apiClient.get(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * Crear nuevo proyecto
+   */
+  async create(projectData: any) {
+    const response = await apiClient.post(API_CONFIG.ENDPOINTS.PROJECTS, projectData);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * Actualizar proyecto existente
+   */
+  async update(id: string | number, projectData: any) {
+    const response = await apiClient.put(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`, projectData);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * Eliminar proyecto
+   */
+  async delete(id: string | number) {
+    const response = await apiClient.delete(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
+  }
 };
+
+// ========================================
+// DIAGNÓSTICO Y DEBUG
+// ========================================
+
+export const debugAPI = {
+  /**
+   * Verificar conectividad con el backend
+   */
+  async testConnection() {
+    try {
+      console.log('🔧 Probando conectividad con:', API_CONFIG.BASE_URL);
+      
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      console.log('📡 Health check response:', response.status);
+      return {
+        success: response.ok,
+        status: response.status,
+        url: API_CONFIG.BASE_URL
+      };
+    } catch (error) {
+      console.error('❌ Error en conexión:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        url: API_CONFIG.BASE_URL
+      };
+    }
+  },
+
+  /**
+   * Mostrar configuración actual
+   */
+  showConfig() {
+    console.log('🔧 API Configuration:');
+    console.log('  BASE_URL:', API_CONFIG.BASE_URL);
+    console.log('  VITE_API_URL:', import.meta.env.VITE_API_URL);
+    console.log('  window.location.origin:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
+    console.log('  ENDPOINTS:', API_CONFIG.ENDPOINTS);
+  }
+};
+
+// ========================================
+// EJEMPLOS DE USO
+// ========================================
+
+/*
+// En componentes React:
+
+import { projectAPI, debugAPI } from '@/lib/api';
+
+// Para obtener proyectos:
+const fetchProjects = async () => {
+  try {
+    const projects = await projectAPI.getAll();
+    setProjects(projects);
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+};
+
+// Para actualizar proyecto:
+const handleSave = async (projectData) => {
+  try {
+    const result = await projectAPI.update(project.id, projectData);
+    console.log('Proyecto actualizado:', result);
+    await fetchProjects(); // Refresh
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+};
+
+// Para debug (ejecutar en consola):
+debugAPI.showConfig();
+debugAPI.testConnection();
+
+*/
+
+// ========================================
+// EXPORT POR DEFECTO
+// ========================================
+
+export default API_CONFIG;
