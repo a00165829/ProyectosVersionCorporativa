@@ -1,246 +1,301 @@
-import { Router } from 'express';
-import { requireAuth, requireRole } from '../middleware/auth';
-import { pool } from '../db/pool';
+import express from 'express';
+import pool from '../config/database';
 
-export const projectsRouter = Router();
-projectsRouter.use(requireAuth);
+const router = express.Router();
 
-// ── Participantes (DEBE ir antes de /:id para que no colisione) ──────────────
-projectsRouter.get('/participants/list', async (_req, res) => {
-  const result = await pool.query(
-    'SELECT id, name FROM participants WHERE deleted_at IS NULL ORDER BY name'
-  );
-  res.json(result.rows);
-});
-
-// ── Listar proyectos ─────────────────────────────────────────────────────────
-projectsRouter.get('/', async (req, res) => {
-  const { portfolio_id } = req.query;
-  const isLider = req.user!.role === 'lider';
-  const params: any[] = [portfolio_id];
-  let filter = '';
-
-  if (isLider) {
-    params.push(req.user!.id);
-    filter = ` AND p.created_by = $${params.length}`;
-  }
-
-  const result = await pool.query(`
-    SELECT p.*, s.name AS structure_name, pa.name AS responsible_name, rq.name AS requestor_name
-    FROM projects p
-    LEFT JOIN structures s ON s.id = p.structure_id
-    LEFT JOIN participants pa ON pa.id = p.responsible_id
-    LEFT JOIN requestors rq ON rq.id = p.requestor_id
-    WHERE p.portfolio_id = $1 AND p.deleted_at IS NULL${filter}
-    ORDER BY p.priority ASC NULLS LAST, p.name
-  `, params);
-  res.json(result.rows);
-});
-
-// ── Detalle de proyecto ──────────────────────────────────────────────────────
-projectsRouter.get('/:id', async (req, res) => {
-  const result = await pool.query(`
-    SELECT p.*, pa.name AS responsible_name, rq.name AS requestor_name
-    FROM projects p
-    LEFT JOIN participants pa ON pa.id = p.responsible_id
-    LEFT JOIN requestors rq ON rq.id = p.requestor_id
-    WHERE p.id = $1 AND p.deleted_at IS NULL
-  `, [req.params.id]);
-  if (!result.rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
-
-  if (req.user!.role === 'lider' && result.rows[0].created_by !== req.user!.id) {
-    return res.status(403).json({ error: 'No tienes acceso a este proyecto' });
-  }
-
-  res.json(result.rows[0]);
-});
-
-// ── Crear proyecto ───────────────────────────────────────────────────────────
-projectsRouter.post('/', async (req, res) => {
-  const { name, portfolio_id, structure_id, scrum_stage, description,
-    classification, priority, progress, responsible_id, requestor_id,
-    project_start_date, dev_start_date, dev_end_date,
-    test_start_date, test_end_date, go_live_date, planned_go_live_date } = req.body;
-  const result = await pool.query(`
-    INSERT INTO projects (name, portfolio_id, structure_id, scrum_stage, stage, description,
-      classification, priority, progress, responsible_id, requestor_id,
-      project_start_date, dev_start_date, dev_end_date, test_start_date, test_end_date,
-      go_live_date, planned_go_live_date, created_by)
-    VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-    RETURNING *
-  `, [name, portfolio_id, structure_id, scrum_stage||'Backlog', description,
-      classification||'Proyecto', priority||null, progress||0, responsible_id||null,
-      requestor_id||null,
-      project_start_date||null, dev_start_date||null, dev_end_date||null,
-      test_start_date||null, test_end_date||null,
-      go_live_date||null, planned_go_live_date||null, req.user!.id]);
-  res.status(201).json(result.rows[0]);
-});
-
-// Helper: convierte string vacio a null para fechas
-function dateOrNull(v: any): string | null {
-  if (!v || v === '') return null;
-  return v;
+// Interfaces para TypeScript
+interface ProjectData {
+  nombre?: string;
+  descripcion?: string;
+  fecha_inicio_proyecto?: string;
+  fecha_inicio_desarrollo?: string;
+  fecha_fin_desarrollo?: string;
+  fecha_inicio_pruebas?: string;
+  fecha_fin_pruebas?: string;
+  fecha_go_live_planeado?: string;
+  fecha_go_live_real?: string;
+  avance?: number;
+  presupuesto_total?: number;
+  company_id?: number;
+  portfolio_id?: number;
+  gerente_asignado_id?: string;
+  lider_asignado_id?: string;
 }
 
-// ── Actualizar proyecto ──────────────────────────────────────────────────────
-projectsRouter.put('/:id', requireRole('admin','director','gerente','lider'), async (req, res) => {
-  const { name, scrum_stage, description, classification, priority, progress,
-    responsible_id, requestor_id, project_start_date, dev_start_date, dev_end_date,
-    test_start_date, test_end_date, go_live_date, planned_go_live_date, structure_id } = req.body;
-
-  // Lider solo puede editar sus propios proyectos
-  if (req.user!.role === 'lider') {
-    const check = await pool.query('SELECT created_by FROM projects WHERE id = $1', [req.params.id]);
-    if (!check.rows[0] || check.rows[0].created_by !== req.user!.id) {
-      return res.status(403).json({ error: 'Solo puedes editar proyectos que hayas creado' });
-    }
+// GET /api/projects - Obtener todos los proyectos
+router.get('/', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        c.nombre as company_name,
+        pt.nombre as portfolio_name,
+        u1.nombre as gerente_name,
+        u2.nombre as lider_name
+      FROM projects p
+      LEFT JOIN companies c ON p.company_id = c.id
+      LEFT JOIN portfolios pt ON p.portfolio_id = pt.id
+      LEFT JOIN profiles u1 ON p.gerente_asignado_id = u1.id
+      LEFT JOIN profiles u2 ON p.lider_asignado_id = u2.id
+      ORDER BY p.created_at DESC
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error al obtener proyectos:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
-
-  // Auto 100% cuando etapa = Go Live o Completado
-  const finalProgress = (scrum_stage === 'Go Live' || scrum_stage === 'Completado')
-    ? 100 : progress;
-
-  const result = await pool.query(`
-    UPDATE projects SET
-      name = COALESCE($1, name),
-      scrum_stage = COALESCE($2, scrum_stage),
-      stage = COALESCE($2, stage),
-      description = COALESCE($3, description),
-      classification = COALESCE($4, classification),
-      priority = $5,
-      progress = COALESCE($6, progress),
-      responsible_id = $7,
-      requestor_id = $8,
-      project_start_date = $9,
-      dev_start_date = $10,
-      dev_end_date = $11,
-      test_start_date = $12,
-      test_end_date = $13,
-      go_live_date = $14,
-      planned_go_live_date = $15,
-      structure_id = COALESCE($16, structure_id),
-      updated_at = now()
-    WHERE id = $17 AND deleted_at IS NULL RETURNING *
-  `, [name, scrum_stage, description, classification, priority??null, finalProgress,
-      responsible_id??null, requestor_id??null,
-      dateOrNull(project_start_date), dateOrNull(dev_start_date), dateOrNull(dev_end_date),
-      dateOrNull(test_start_date), dateOrNull(test_end_date),
-      dateOrNull(go_live_date), dateOrNull(planned_go_live_date),
-      structure_id, req.params.id]);
-  if (!result.rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
-  res.json(result.rows[0]);
 });
 
-// ── Eliminar proyecto (soft delete) ──────────────────────────────────────────
-projectsRouter.delete('/:id', requireRole('admin','director','gerente','lider'), async (req, res) => {
-  if (req.user!.role === 'lider') {
-    const check = await pool.query('SELECT created_by FROM projects WHERE id = $1', [req.params.id]);
-    if (!check.rows[0] || check.rows[0].created_by !== req.user!.id) {
-      return res.status(403).json({ error: 'Solo puedes eliminar proyectos que hayas creado' });
+// GET /api/projects/:id - Obtener un proyecto específico
+router.get('/:id', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        c.nombre as company_name,
+        pt.nombre as portfolio_name,
+        u1.nombre as gerente_name,
+        u2.nombre as lider_name
+      FROM projects p
+      LEFT JOIN companies c ON p.company_id = c.id
+      LEFT JOIN portfolios pt ON p.portfolio_id = pt.id
+      LEFT JOIN profiles u1 ON p.gerente_asignado_id = u1.id
+      LEFT JOIN profiles u2 ON p.lider_asignado_id = u2.id
+      WHERE p.id = $1
+    `, [projectId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Proyecto no encontrado' });
     }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error al obtener proyecto:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
-  await pool.query('UPDATE projects SET deleted_at=now() WHERE id=$1', [req.params.id]);
-  res.json({ success: true });
 });
 
-// ── Comentarios ──────────────────────────────────────────────────────────────
-projectsRouter.get('/:id/comments', async (req, res) => {
-  const result = await pool.query(`
-    SELECT c.*, p.display_name as author_name
-    FROM project_comments c
-    LEFT JOIN profiles p ON p.id = c.user_id
-    WHERE c.project_id = $1 AND c.deleted_at IS NULL
-    ORDER BY c.created_at DESC
-  `, [req.params.id]);
-  res.json(result.rows);
-});
+// PUT /api/projects/:id - Actualizar proyecto (FIX COMPLETO)
+router.put('/:id', async (req, res) => {
+  const projectId: string = req.params.id;
+  const projectData: ProjectData = req.body;
 
-projectsRouter.post('/:id/comments', async (req, res) => {
-  const { content } = req.body;
-  if (!content?.trim()) return res.status(400).json({ error: 'Contenido requerido' });
-  const result = await pool.query(`
-    INSERT INTO project_comments (project_id, user_id, content)
-    VALUES ($1, $2, $3) RETURNING *
-  `, [req.params.id, req.user!.id, content.trim()]);
-  res.status(201).json(result.rows[0]);
-});
+  try {
+    console.log('🔍 Actualizando proyecto ID:', projectId);
+    console.log('📝 Datos recibidos:', projectData);
 
-projectsRouter.delete('/:projectId/comments/:commentId', async (req, res) => {
-  await pool.query(
-    'UPDATE project_comments SET deleted_at = now() WHERE id = $1',
-    [req.params.commentId]
-  );
-  res.json({ success: true });
-});
+    // Función para formatear fechas correctamente
+    const formatDateForPostgres = (dateStr?: string): string | null => {
+      if (!dateStr) return null;
+      
+      console.log('📅 Procesando fecha:', dateStr, 'tipo:', typeof dateStr);
+      
+      // Si ya está en formato ISO YYYY-MM-DD, mantenerlo
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+      }
+      
+      // Si viene como MM/DD/YYYY
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          const [month, day, year] = parts;
+          const formatted = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          console.log('🔧 Convertida:', dateStr, '→', formatted);
+          return formatted;
+        }
+      }
+      
+      return dateStr;
+    };
 
-// ── Historial de estatus ─────────────────────────────────────────────────────
-projectsRouter.get('/:id/status-history', async (req, res) => {
-  const result = await pool.query(`
-    SELECT sh.*, p.display_name as author_name
-    FROM project_status_history sh
-    LEFT JOIN profiles p ON p.id = sh.user_id
-    WHERE sh.project_id = $1
-    ORDER BY sh.created_at DESC
-  `, [req.params.id]);
-  res.json(result.rows);
-});
+    const updateQuery = `
+      UPDATE projects 
+      SET 
+        nombre = $1,
+        descripcion = $2,
+        fecha_inicio_proyecto = $3::date,
+        fecha_inicio_desarrollo = $4::date,
+        fecha_fin_desarrollo = $5::date,
+        fecha_inicio_pruebas = $6::date,
+        fecha_fin_pruebas = $7::date,
+        fecha_go_live_planeado = $8::date,
+        fecha_go_live_real = $9::date,
+        avance = $10::numeric,
+        presupuesto_total = $11::numeric,
+        company_id = $12,
+        portfolio_id = $13,
+        gerente_asignado_id = $14,
+        lider_asignado_id = $15,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $16
+      RETURNING 
+        id,
+        nombre,
+        descripcion,
+        fecha_inicio_proyecto,
+        fecha_inicio_desarrollo,
+        fecha_fin_desarrollo,
+        fecha_inicio_pruebas,
+        fecha_fin_pruebas,
+        fecha_go_live_planeado,
+        fecha_go_live_real,
+        avance,
+        presupuesto_total,
+        company_id,
+        portfolio_id,
+        gerente_asignado_id,
+        lider_asignado_id,
+        created_at,
+        updated_at;
+    `;
 
-projectsRouter.post('/:id/status-history', async (req, res) => {
-  const { description, stage, notes } = req.body;
-  if (!description?.trim()) return res.status(400).json({ error: 'Descripcion requerida' });
+    const values: (string | number | null)[] = [
+      projectData.nombre || null,
+      projectData.descripcion || null,
+      formatDateForPostgres(projectData.fecha_inicio_proyecto),
+      formatDateForPostgres(projectData.fecha_inicio_desarrollo),
+      formatDateForPostgres(projectData.fecha_fin_desarrollo),
+      formatDateForPostgres(projectData.fecha_inicio_pruebas),
+      formatDateForPostgres(projectData.fecha_fin_pruebas),
+      formatDateForPostgres(projectData.fecha_go_live_planeado),
+      formatDateForPostgres(projectData.fecha_go_live_real), // ← CRÍTICO
+      parseFloat(projectData.avance?.toString() || '0') || 0,
+      parseFloat(projectData.presupuesto_total?.toString() || '0') || 0,
+      projectData.company_id || null,
+      projectData.portfolio_id || null,
+      projectData.gerente_asignado_id || null,
+      projectData.lider_asignado_id || null,
+      parseInt(projectId)
+    ];
 
-  if (stage) {
-    const isComplete = stage === 'Go Live' || stage === 'Completado';
-    if (isComplete) {
-      await pool.query(
-        `UPDATE projects SET scrum_stage=$1, stage=$1, progress=100, updated_at=now()
-         WHERE id=$2 AND deleted_at IS NULL`,
-        [stage, req.params.id]
-      );
-    } else {
-      await pool.query(
-        `UPDATE projects SET scrum_stage=$1, stage=$1, updated_at=now()
-         WHERE id=$2 AND deleted_at IS NULL`,
-        [stage, req.params.id]
-      );
+    console.log('🚀 Ejecutando UPDATE con valores:', values);
+
+    const result = await pool.query(updateQuery, values);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Proyecto no encontrado' });
     }
+
+    const updatedProject = result.rows[0];
+    console.log('✅ Proyecto actualizado exitosamente:', updatedProject);
+    
+    // Formatear fechas para respuesta (evitar timezone issues)
+    const formatDateForResponse = (date: any): string | null => {
+      if (!date) return null;
+      if (date instanceof Date) {
+        return date.toISOString().split('T')[0];
+      }
+      return date;
+    };
+
+    const responseProject = {
+      ...updatedProject,
+      fecha_inicio_proyecto: formatDateForResponse(updatedProject.fecha_inicio_proyecto),
+      fecha_inicio_desarrollo: formatDateForResponse(updatedProject.fecha_inicio_desarrollo),
+      fecha_fin_desarrollo: formatDateForResponse(updatedProject.fecha_fin_desarrollo),
+      fecha_inicio_pruebas: formatDateForResponse(updatedProject.fecha_inicio_pruebas),
+      fecha_fin_pruebas: formatDateForResponse(updatedProject.fecha_fin_pruebas),
+      fecha_go_live_planeado: formatDateForResponse(updatedProject.fecha_go_live_planeado),
+      fecha_go_live_real: formatDateForResponse(updatedProject.fecha_go_live_real)
+    };
+
+    console.log('📤 Respuesta formateada:', responseProject);
+
+    res.json({
+      message: 'Proyecto actualizado exitosamente',
+      project: responseProject
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error al actualizar proyecto:', error);
+    console.error('Stack:', error.stack);
+    res.status(500).json({ 
+      message: 'Error interno del servidor',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
-
-  const result = await pool.query(`
-    INSERT INTO project_status_history (project_id, user_id, description, stage, notes)
-    VALUES ($1, $2, $3, $4, $5) RETURNING *
-  `, [req.params.id, req.user!.id, description.trim(), stage || null, notes?.trim() || '']);
-  res.status(201).json(result.rows[0]);
 });
 
-projectsRouter.delete('/:projectId/status-history/:entryId', async (req, res) => {
-  await pool.query('DELETE FROM project_status_history WHERE id = $1', [req.params.entryId]);
-  res.json({ success: true });
+// POST /api/projects - Crear nuevo proyecto
+router.post('/', async (req, res) => {
+  try {
+    const projectData: ProjectData = req.body;
+    
+    const insertQuery = `
+      INSERT INTO projects (
+        nombre, descripcion, fecha_inicio_proyecto, fecha_inicio_desarrollo,
+        fecha_fin_desarrollo, fecha_inicio_pruebas, fecha_fin_pruebas,
+        fecha_go_live_planeado, fecha_go_live_real, avance, presupuesto_total,
+        company_id, portfolio_id, gerente_asignado_id, lider_asignado_id,
+        created_by, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *;
+    `;
+
+    const values: (string | number | null)[] = [
+      projectData.nombre || null,
+      projectData.descripcion || null,
+      projectData.fecha_inicio_proyecto || null,
+      projectData.fecha_inicio_desarrollo || null,
+      projectData.fecha_fin_desarrollo || null,
+      projectData.fecha_inicio_pruebas || null,
+      projectData.fecha_fin_pruebas || null,
+      projectData.fecha_go_live_planeado || null,
+      projectData.fecha_go_live_real || null,
+      parseFloat(projectData.avance?.toString() || '0') || 0,
+      parseFloat(projectData.presupuesto_total?.toString() || '0') || 0,
+      projectData.company_id || null,
+      projectData.portfolio_id || null,
+      projectData.gerente_asignado_id || null,
+      projectData.lider_asignado_id || null,
+      (req as any).user?.sub || null // Usuario que crea el proyecto
+    ];
+
+    const result = await pool.query(insertQuery, values);
+    
+    res.status(201).json({
+      message: 'Proyecto creado exitosamente',
+      project: result.rows[0]
+    });
+
+  } catch (error: any) {
+    console.error('Error al crear proyecto:', error);
+    res.status(500).json({ 
+      message: 'Error interno del servidor',
+      error: error.message 
+    });
+  }
 });
 
-// ── Archivos ─────────────────────────────────────────────────────────────────
-projectsRouter.get('/:id/files', async (req, res) => {
-  const result = await pool.query(`
-    SELECT f.*, p.display_name as uploader_name
-    FROM project_files f
-    LEFT JOIN profiles p ON p.id = f.uploaded_by
-    WHERE f.project_id = $1
-    ORDER BY f.created_at DESC
-  `, [req.params.id]);
-  res.json(result.rows);
+// DELETE /api/projects/:id - Eliminar proyecto
+router.delete('/:id', async (req, res) => {
+  try {
+    const projectId: string = req.params.id;
+    
+    const deleteQuery = 'DELETE FROM projects WHERE id = $1 RETURNING *';
+    const result = await pool.query(deleteQuery, [projectId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Proyecto no encontrado' });
+    }
+    
+    res.json({
+      message: 'Proyecto eliminado exitosamente',
+      project: result.rows[0]
+    });
+
+  } catch (error: any) {
+    console.error('Error al eliminar proyecto:', error);
+    res.status(500).json({ 
+      message: 'Error interno del servidor',
+      error: error.message 
+    });
+  }
 });
 
-projectsRouter.post('/:id/files', async (req, res) => {
-  const { name, url } = req.body;
-  const result = await pool.query(`
-    INSERT INTO project_files (project_id, name, s3_key, uploaded_by)
-    VALUES ($1, $2, $3, $4) RETURNING *
-  `, [req.params.id, name, url, req.user!.id]);
-  res.status(201).json(result.rows[0]);
-});
-
-projectsRouter.delete('/:projectId/files/:fileId', async (req, res) => {
-  await pool.query('DELETE FROM project_files WHERE id = $1', [req.params.fileId]);
-  res.json({ success: true });
-});
+export default router;
