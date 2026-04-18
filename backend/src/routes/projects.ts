@@ -1,11 +1,11 @@
 import express from 'express';
 import { pool } from '../db/pool';
-import { authenticateToken, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole } from '../middleware/auth';
 
 const router = express.Router();
 
 // Get all projects
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const query = `
       SELECT 
@@ -27,7 +27,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get project by ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const query = `
@@ -54,7 +54,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create project
-router.post('/', authenticateToken, requireRole(['admin', 'director', 'gerente']), async (req, res) => {
+router.post('/', requireAuth, requireRole(['admin', 'director', 'gerente']), async (req, res) => {
   try {
     const {
       name,
@@ -93,7 +93,7 @@ router.post('/', authenticateToken, requireRole(['admin', 'director', 'gerente']
 });
 
 // Update project
-router.put('/:id', authenticateToken, requireRole(['admin', 'director', 'gerente']), async (req, res) => {
+router.put('/:id', requireAuth, requireRole(['admin', 'director', 'gerente']), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -138,7 +138,7 @@ router.put('/:id', authenticateToken, requireRole(['admin', 'director', 'gerente
 });
 
 // Delete project (soft delete)
-router.delete('/:id', authenticateToken, requireRole(['admin', 'director']), async (req, res) => {
+router.delete('/:id', requireAuth, requireRole(['admin', 'director']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -162,4 +162,5 @@ router.delete('/:id', authenticateToken, requireRole(['admin', 'director']), asy
   }
 });
 
+export { router as projectsRouter };
 export default router;
