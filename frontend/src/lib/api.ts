@@ -25,7 +25,12 @@ const getAPIURL = (): string => {
 // ========================================
 
 const getAuthToken = (): string | null => {
-  return localStorage.getItem('auth_token');
+  // Modo dev: JWT propio en localStorage (dev-signin)
+  const devToken = localStorage.getItem('auth_token');
+  if (devToken) return devToken;
+
+  // Modo producción: idToken de Azure AD / MSAL en sessionStorage
+  return sessionStorage.getItem('msal_token');
 };
 
 export const setAuthToken = (token: string): void => {
@@ -273,12 +278,12 @@ export const debugAPI = {
   },
 
   showTokenInfo() {
-    const token = getAuthToken();
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('msal_token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         console.log('🔐 Token Info:');
-        console.log('  User ID:', payload.id);
+        console.log('  User ID:', payload.id || payload.oid);
         console.log('  Role:', payload.role);
         console.log('  Expires:', new Date(payload.exp * 1000));
         console.log('  Valid:', payload.exp * 1000 > Date.now());
