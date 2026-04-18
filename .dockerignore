@@ -1,0 +1,71 @@
+# ====================================================================
+# .dockerignore — PMO Portal
+# Excluye archivos innecesarios del build context para Docker / ACR.
+# Esto evita subir node_modules de Windows (permisos rotos) y reduce
+# el tamaño del contexto de ~438 MB a ~10 MB.
+# ====================================================================
+
+# Dependencias (se instalan dentro del contenedor con npm ci)
+**/node_modules/
+**/.npm/
+
+# Artefactos de build local
+**/dist/
+**/build/
+**/.vite/
+**/coverage/
+
+# Backups del instalador y versiones antiguas
+**/*.bak
+**/*.bak-*
+**/*.backup
+**/*.orig
+_archive_sonnet/
+
+# Archivos sueltos de Sonnet en la raíz (no son fuente del proyecto)
+auth-backup*.ts
+auth-con-jwt.ts
+auth-corregido.ts
+middleware-auth*.ts
+projects-backup.ts
+projects-corregido*.ts
+projects-sin-companies.ts
+projects-working-backup.ts
+api-final-sin-duplicados.ts
+roles.ts
+Dockerfile-corregido
+Dockerfile-sin-build.txt
+tsconfig-node-missing.json
+sustituir-*.bat
+extraer-*.bat
+test-api.sh
+
+# Git / VCS
+.git/
+.gitignore
+.gitattributes
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Documentación y scripts que no van al runtime
+*.md
+!README.md
+deploy.bat
+install-fix.sh
+install-fix.bat
+
+# Compose de desarrollo
+docker-compose.yml
+
+# Documentos internos
+documentos/
