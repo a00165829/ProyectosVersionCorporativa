@@ -2,9 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useMsal } from '@azure/msal-react'
 import { loginRequest, DEV_MODE } from '@/lib/msal'
 import { api } from '@/lib/api'
-
 const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || ''
-
 export type AppRole = 'admin' | 'director' | 'gerente' | 'lider' | 'usuario' | 'pending'
 
 interface AuthUser {
@@ -37,7 +35,7 @@ export const useAuth = () => useContext(AuthContext)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { instance, accounts } = useMsal()
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser]       = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   // ── Cargar usuario ────────────────────────────────────────────────────────
@@ -45,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function loadUser() {
       try {
         if (DEV_MODE) {
-          const me = await api.get('/api/auth/me')
+          const me = await api.get<{ user: AuthUser }>('/api/auth/me')
           setUser(me.user)
           // Store perms for PortfolioContext filtering
           sessionStorage.setItem('user_perms', JSON.stringify({
@@ -55,12 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (accounts.length > 0) {
           // Producción: obtener token de Enterprise App y sincronizar con backend
           const result = await instance.acquireTokenSilent({
-            scopes: ['openid', 'profile', 'email'],
-            account: accounts[0],
-          })
-          sessionStorage.setItem('msal_token', result.idToken)
+  scopes: ['openid', 'profile', 'email'],
+  account: accounts[0],
+})
+sessionStorage.setItem('msal_token', result.idToken)
           await api.post('/api/auth/sync', {})
-          const me = await api.get('/api/auth/me')
+          const me = await api.get<{ user: AuthUser }>('/api/auth/me')
           setUser(me.user)
           sessionStorage.setItem('user_perms', JSON.stringify({
             companyIds: me.user.companyIds || [],
@@ -79,17 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async () => {
     if (DEV_MODE) {
-      // En dev mode, usar la nueva función devSignIn del api
+      // En dev mode, recargar el usuario del backend (toma el rol del header X-Dev-Role)
       try {
-        const result = await api.devSignIn()
-        if (result.success) {
-          setUser(result.user)
-          // Store perms for PortfolioContext filtering
-          sessionStorage.setItem('user_perms', JSON.stringify({
-            companyIds: result.user.companyIds || [],
-            portfolioIds: result.user.portfolioIds || [],
-          }))
-        }
+        const me = await api.get<{ user: AuthUser }>('/api/auth/me')
+        setUser(me.user)
       } catch (err) {
         console.error('Error en dev signIn:', err)
       }
@@ -100,16 +91,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     sessionStorage.removeItem('msal_token')
-    sessionStorage.removeItem('user_perms')
     setUser(null)
     if (!DEV_MODE) await instance.logoutRedirect()
   }
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin    = user?.role === 'admin'
   const isDirector = user?.role === 'director'
-  const isGerente = user?.role === 'gerente'
-  const isLider = user?.role === 'lider'
-  const isManager = ['admin', 'director', 'gerente'].includes(user?.role || '')
+  const isGerente  = user?.role === 'gerente'
+  const isLider    = user?.role === 'lider'
+  const isManager  = ['admin', 'director', 'gerente'].includes(user?.role || '')
   const isApproved = !!user && user.role !== 'pending'
 
   const hasModuleAccess = (mod: string) => {

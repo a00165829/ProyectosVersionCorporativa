@@ -24,8 +24,10 @@ import ParticipantsList from '@/pages/ParticipantsList'
 import ActivitiesCatalog from '@/pages/ActivitiesCatalog'
 import ResourcesCatalog from '@/pages/ResourcesCatalog'
 import CompaniesCatalog from '@/pages/CompaniesCatalog'
+import RequestorsCatalog from '@/pages/RequestorsCatalog'
 import Trash from '@/pages/Trash'
 import EditMenus from '@/pages/EditMenus'
+import AiChat from '@/components/ai/AiChat'
 import { Loader2 } from 'lucide-react'
 
 const queryClient = new QueryClient({
@@ -74,12 +76,14 @@ function AppRoutes() {
           {isAdmin && <Route path="/admin/activities" element={<ActivitiesCatalog />} />}
           {isAdmin && <Route path="/admin/resources" element={<ResourcesCatalog />} />}
           {isAdmin && <Route path="/admin/companies" element={<CompaniesCatalog />} />}
+          {isAdmin && <Route path="/admin/requestors" element={<RequestorsCatalog />} />}
           {isAdmin && <Route path="/admin/trash" element={<Trash />} />}
           {isAdmin && <Route path="/admin/menus" element={<EditMenus />} />}
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppLayout>
+      <AiChat />
     </PortfolioProvider>
   )
 }

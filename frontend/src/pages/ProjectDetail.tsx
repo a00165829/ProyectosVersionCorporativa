@@ -5,8 +5,8 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { toast } from 'sonner'
 import {
-  ArrowLeft, Edit, MessageSquare, Trash2, Calendar, User,
-  Tag, TrendingUp, Send, Loader2, Clock, Plus, X, Paperclip
+  ArrowLeft, Edit, MessageSquare, Trash2, Calendar, User, UserCheck,
+  Tag, TrendingUp, Send, Loader2, Clock, Plus, X, Paperclip, AlertTriangle
 } from 'lucide-react'
 import ProjectFormDialog from '@/components/projects/ProjectFormDialog'
 import type { Project } from './ProjectsList'
@@ -39,7 +39,9 @@ function ProgressBar({ value }: { value: number }) {
   )
 }
 
-const fmt = (d:string|null) => d ? new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : '—'
+// Fix timezone: para fechas tipo "2026-04-04" agregar T12:00:00 para evitar desfase de dia
+const parseDate = (d: string) => d.length === 10 ? new Date(d + 'T12:00:00') : new Date(d)
+const fmt = (d:string|null) => d ? parseDate(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : '—'
 const fmtDT = (d:string) => new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
 
 export default function ProjectDetail() {
@@ -116,10 +118,17 @@ export default function ProjectDetail() {
   const delay = project.go_live_date && project.planned_go_live_date
     ? Math.round((new Date(project.go_live_date).getTime()-new Date(project.planned_go_live_date).getTime())/86400000) : 0
 
+  // Calculate delay percentage
+  const totalDays = project.planned_go_live_date && (project.project_start_date || project.dev_start_date)
+    ? Math.round((new Date(project.planned_go_live_date).getTime()-new Date(project.project_start_date || project.dev_start_date!).getTime())/86400000)
+    : 0
+  const delayPct = totalDays > 0 && delay > 0 ? Math.round((delay / totalDays) * 100) : 0
+
   const inputCls = "w-full border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <Link to="/projects" className="mt-1 text-muted-foreground hover:text-foreground"><ArrowLeft className="h-5 w-5"/></Link>
@@ -132,7 +141,10 @@ export default function ProjectDetail() {
                 </span>
               )}
             </div>
-            {project.description && <p className="text-muted-foreground text-sm mt-1 max-w-2xl">{project.description}</p>}
+            <p className="text-muted-foreground text-sm mt-1">
+              {project.requestor_name && <>Solicitante: {project.requestor_name} · </>}
+              {project.responsible_name && <>Líder: {project.responsible_name}</>}
+            </p>
           </div>
         </div>
         {isManager && (
@@ -174,20 +186,131 @@ className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medi
         )}
       </div>
 
+      {/* Info cards row (like Lovable) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card border rounded-xl p-4">
+          <p className="text-xs text-muted-foreground font-medium mb-1">AVANCE</p>
+          <p className="text-2xl font-bold">{project.progress||0}%</p>
+          <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className={`h-full rounded-full ${(project.progress||0)>=80?'bg-green-500':(project.progress||0)>=50?'bg-blue-500':'bg-amber-500'}`} style={{width:`${project.progress||0}%`}}/>
+          </div>
+        </div>
+        <div className="bg-card border rounded-xl p-4">
+          <p className="text-xs text-muted-foreground font-medium mb-1">ETAPA ACTUAL</p>
+          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STAGE_COLOR[project.scrum_stage]||'bg-gray-100 text-gray-600'}`}>{project.scrum_stage}</span>
+        </div>
+        <div className="bg-card border rounded-xl p-4">
+          <p className="text-xs text-muted-foreground font-medium mb-1">GO LIVE REAL</p>
+          <p className="text-sm font-medium">{fmt(project.go_live_date)}</p>
+        </div>
+        {delay > 0 ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <p className="text-xs text-red-600 font-medium mb-1 flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> RETRASO</p>
+            <p className="text-2xl font-bold text-red-600">{delay} días</p>
+            {delayPct > 0 && <p className="text-xs text-red-500 mt-1">({delayPct}%)</p>}
+          </div>
+        ) : (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <p className="text-xs text-green-600 font-medium mb-1">ESTADO</p>
+            <p className="text-sm font-medium text-green-700">En tiempo</p>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {/* Description */}
+          {project.description && (
+            <div className="bg-card border rounded-xl p-5">
+              <h2 className="font-semibold mb-2">Descripción</h2>
+              <p className="text-sm text-muted-foreground">{project.description}</p>
+            </div>
+          )}
+
+          {/* Dates */}
           <div className="bg-card border rounded-xl p-5">
-            <h2 className="font-semibold mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary"/> Avance del proyecto</h2>
-            <ProgressBar value={project.progress||0}/>
-            <div className="flex items-center gap-2 mt-3">
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STAGE_COLOR[project.scrum_stage]||'bg-gray-100 text-gray-600'}`}>{project.scrum_stage}</span>
-              {delay>0 && <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-red-100 text-red-700">Retrasado {delay} días</span>}
+            <h2 className="font-semibold mb-3 flex items-center gap-2"><Calendar className="h-4 w-4 text-primary"/> Fechas del Proyecto</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div><p className="text-[10px] text-muted-foreground">Inicio Proyecto</p><p className="text-sm font-medium">{fmt(project.project_start_date)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Inicio Desarrollo</p><p className="text-sm font-medium">{fmt(project.dev_start_date)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Fin Desarrollo</p><p className="text-sm font-medium">{fmt(project.dev_end_date)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Inicio Pruebas</p><p className="text-sm font-medium">{fmt(project.test_start_date)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Fin Pruebas</p><p className="text-sm font-medium">{fmt(project.test_end_date)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Go Live Planeado</p><p className="text-sm font-medium">{fmt(project.planned_go_live_date)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Go Live Real</p><p className="text-sm font-medium">{fmt(project.go_live_date)}</p></div>
             </div>
           </div>
 
+          {/* Comments */}
+          <div className="bg-card border rounded-xl p-5">
+            <h2 className="font-semibold mb-4 flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary"/> Comentarios del Proyecto
+              <span className="text-xs text-muted-foreground font-normal">({comments.length})</span>
+            </h2>
+            <div className="flex gap-2 mb-4">
+              <textarea value={newComment} onChange={e=>setNewComment(e.target.value)}
+                placeholder="Escribe un comentario... (Ctrl+Enter para enviar)" rows={2}
+                className="flex-1 border rounded-lg px-3 py-2 text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                onKeyDown={e=>{ if(e.key==='Enter'&&e.ctrlKey&&newComment.trim()) addComment.mutate() }}/>
+              <button onClick={()=>newComment.trim()&&addComment.mutate()} disabled={!newComment.trim()||addComment.isPending}
+                className="px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 self-end transition-colors">
+                {addComment.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
+              </button>
+            </div>
+            {comments.length===0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Sin comentarios.</p>
+            ) : (
+              <div className="space-y-3">
+                {comments.map(c=>(
+                  <div key={c.id} className="flex gap-3 p-3 rounded-lg bg-muted/50">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-xs font-semibold text-primary">{(c.author_name||'U').charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium">{c.author_name||'Usuario'}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{fmtDT(c.created_at)}</span>
+                          {isManager && <button onClick={()=>deleteComment.mutate(c.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3"/></button>}
+                        </div>
+                      </div>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{c.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Files */}
+          <div className="bg-card border rounded-xl p-5">
+            <h2 className="font-semibold mb-4 flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-primary"/> Archivos Anexos
+              <span className="text-xs text-muted-foreground font-normal">({files.length})</span>
+            </h2>
+            {files.length===0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Sin archivos anexos.</p>
+            ) : (
+              <div className="space-y-2">
+                {files.map(f=>(
+                  <div key={f.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Paperclip className="h-4 w-4 text-muted-foreground"/>
+                      <div>
+                        <p className="text-sm font-medium">{f.name}</p>
+                        <p className="text-xs text-muted-foreground">{f.uploader_name||'Usuario'} · {fmt(f.created_at)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Status History */}
           <div className="bg-card border rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-primary"/> Historial de estatus <span className="text-xs text-muted-foreground font-normal">({statusHistory.length})</span></h2>
+              <h2 className="font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-primary"/> Historial de Estatus <span className="text-xs text-muted-foreground font-normal">({statusHistory.length})</span></h2>
               {isManager && (
                 <button onClick={()=>setShowStatusForm(!showStatusForm)}
                   className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
@@ -223,7 +346,7 @@ className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medi
               </div>
             )}
             {statusHistory.length===0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No hay actualizaciones registradas</p>
+              <p className="text-sm text-muted-foreground text-center py-4">Sin registros de estatus.</p>
             ) : (
               <div className="space-y-3">
                 {statusHistory.map((s,i) => (
@@ -254,72 +377,9 @@ className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medi
               </div>
             )}
           </div>
-
-          <div className="bg-card border rounded-xl p-5">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary"/> Comentarios
-              <span className="text-xs text-muted-foreground font-normal">({comments.length})</span>
-            </h2>
-            <div className="flex gap-2 mb-4">
-              <textarea value={newComment} onChange={e=>setNewComment(e.target.value)}
-                placeholder="Escribe un comentario... (Ctrl+Enter para enviar)" rows={2}
-                className="flex-1 border rounded-lg px-3 py-2 text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                onKeyDown={e=>{ if(e.key==='Enter'&&e.ctrlKey&&newComment.trim()) addComment.mutate() }}/>
-              <button onClick={()=>newComment.trim()&&addComment.mutate()} disabled={!newComment.trim()||addComment.isPending}
-                className="px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 self-end transition-colors">
-                {addComment.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
-              </button>
-            </div>
-            {comments.length===0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No hay comentarios aún</p>
-            ) : (
-              <div className="space-y-3">
-                {comments.map(c=>(
-                  <div key={c.id} className="flex gap-3 p-3 rounded-lg bg-muted/50">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-semibold text-primary">{(c.author_name||'U').charAt(0).toUpperCase()}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium">{c.author_name||'Usuario'}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{fmtDT(c.created_at)}</span>
-                          {isManager && <button onClick={()=>deleteComment.mutate(c.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3"/></button>}
-                        </div>
-                      </div>
-                      <p className="text-sm mt-1 whitespace-pre-wrap">{c.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-card border rounded-xl p-5">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <Paperclip className="h-4 w-4 text-primary"/> Archivos
-              <span className="text-xs text-muted-foreground font-normal">({files.length})</span>
-            </h2>
-            {files.length===0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No hay archivos adjuntos</p>
-            ) : (
-              <div className="space-y-2">
-                {files.map(f=>(
-                  <div key={f.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Paperclip className="h-4 w-4 text-muted-foreground"/>
-                      <div>
-                        <p className="text-sm font-medium">{f.name}</p>
-                        <p className="text-xs text-muted-foreground">{f.uploader_name||'Usuario'} · {fmt(f.created_at)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
+        {/* Sidebar */}
         <div className="space-y-4">
           <div className="bg-card border rounded-xl p-5">
             <h2 className="font-semibold mb-3 flex items-center gap-2"><User className="h-4 w-4 text-primary"/> Responsable</h2>
@@ -327,16 +387,8 @@ className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medi
           </div>
 
           <div className="bg-card border rounded-xl p-5">
-            <h2 className="font-semibold mb-3 flex items-center gap-2"><Calendar className="h-4 w-4 text-primary"/> Fechas</h2>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
-              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio proyecto</span><span className="text-sm font-medium">{fmt(project.project_start_date)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio desarrollo</span><span className="text-sm font-medium">{fmt(project.dev_start_date)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Fin desarrollo</span><span className="text-sm font-medium">{fmt(project.dev_end_date)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Inicio pruebas</span><span className="text-sm font-medium">{fmt(project.test_start_date)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Fin pruebas</span><span className="text-sm font-medium">{fmt(project.test_end_date)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-sm text-muted-foreground">Go-Live planeado</span><span className="text-sm font-medium">{fmt(project.planned_go_live_date)}</span></div>
-              <div className="flex justify-between py-2 col-span-2"><span className="text-sm text-muted-foreground">Go-Live real</span><span className="text-sm font-medium">{fmt(project.go_live_date)}</span></div>
-            </div>
+            <h2 className="font-semibold mb-3 flex items-center gap-2"><UserCheck className="h-4 w-4 text-primary"/> Solicitante</h2>
+            <p className="text-sm">{project.requestor_name||'Sin asignar'}</p>
           </div>
 
           {project.priority!==null && (
@@ -351,7 +403,6 @@ className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medi
             <div className="space-y-2">
               <div className="flex justify-between py-1"><span className="text-sm text-muted-foreground">Tipo</span><span className="text-sm font-medium">{project.classification || '—'}</span></div>
               <div className="flex justify-between py-1"><span className="text-sm text-muted-foreground">Etapa</span><span className="text-sm font-medium">{project.scrum_stage || '—'}</span></div>
-              {project.description && <div className="pt-2 border-t"><span className="text-xs text-muted-foreground">Descripción</span><p className="text-sm mt-1">{project.description}</p></div>}
             </div>
           </div>
         </div>

@@ -1,222 +1,411 @@
-import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { toast } from 'sonner'
-import { X, Loader2, TrendingUp } from 'lucide-react'
-import type { Project } from '@/pages/ProjectsList'
+import React, { useState, useEffect } from 'react';
 
-const SCRUM_STAGES = [
-  'Backlog','Análisis / Diseño','Sprint Planning','En Desarrollo',
-  'Code Review','QA / Pruebas','UAT','Pre-Producción','Go Live',
-]
-
-interface Props {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  project?: Project
-  portfolioId: string
+interface Project {
+  id?: number;
+  nombre?: string;
+  descripcion?: string;
+  fecha_inicio_proyecto?: string;
+  fecha_inicio_desarrollo?: string;
+  fecha_fin_desarrollo?: string;
+  fecha_inicio_pruebas?: string;
+  fecha_fin_pruebas?: string;
+  fecha_go_live_planeado?: string;
+  fecha_go_live_real?: string;
+  avance?: number;
+  presupuesto_total?: number;
+  company_id?: number;
+  portfolio_id?: number;
+  gerente_asignado_id?: string;
+  lider_asignado_id?: string;
 }
 
-interface Participant { id: string; name: string }
+interface ProjectFormDialogProps {
+  project?: Project;
+  onClose: () => void;
+  onProjectUpdated?: (project?: Project) => void;
+}
 
-export default function ProjectFormDialog({ open, onOpenChange, project, portfolioId }: Props) {
-  const qc = useQueryClient()
-  const isEdit = !!project
+const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({ 
+  project, 
+  onClose, 
+  onProjectUpdated 
+}) => {
+  const [projectData, setProjectData] = useState<Project>(project || {});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  const [name, setName]             = useState('')
-  const [description, setDesc]      = useState('')
-  const [classification, setClass]  = useState<'Proyecto'|'Mejora'>('Proyecto')
-  const [priority, setPriority]     = useState('')
-  const [progress, setProgress]     = useState(0)
-  const [stage, setStage]           = useState('Backlog')
-  const [responsible, setResp]      = useState('')
-  const [devStart, setDevStart]     = useState('')
-  const [devEnd, setDevEnd]         = useState('')
-  const [testStart, setTestStart]   = useState('')
-  const [testEnd, setTestEnd]       = useState('')
-  const [plannedGL, setPlannedGL]   = useState('')
-  const [goLive, setGoLive]         = useState('')
-  const [projectStart, setProjectStart] = useState('')
-
-  useEffect(() => {
-    if (project) {
-      setName(project.name); setDesc(project.description||'')
-      setClass((project.classification as 'Proyecto'|'Mejora')||'Proyecto')
-      setPriority(project.priority?.toString()||'')
-      setProgress(project.progress||0); setStage(project.scrum_stage||'Backlog')
-      setResp(project.responsible_id||'')
-      setProjectStart(project.project_start_date||'')
-      setDevStart(project.dev_start_date||'')
-      setGoLive(project.go_live_date||'')
-      setPlannedGL(project.planned_go_live_date||'')
-    } else {
-      setName(''); setDesc(''); setClass('Proyecto'); setPriority('')
-      setProgress(0); setStage('Backlog'); setResp('')
-      setProjectStart(''); setDevStart(''); setDevEnd(''); setTestStart(''); setTestEnd('')
-      setPlannedGL(''); setGoLive('')
+  // API_URL con fallback inteligente
+  const getApiUrl = (): string => {
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
     }
-  }, [project, open])
+    
+    if (window.location.hostname === 'proyectosit.axtel.com.mx') {
+      return 'https://proyectosit.axtel.com.mx';
+    }
+    
+    return 'http://localhost:3000';
+  };
 
-  const { data: participants=[] } = useQuery<Participant[]>({
-    queryKey: ['participants-list'],
-    queryFn: () => api.get<Participant[]>('/api/projects/participants/list'),
-    enabled: open,
-  })
+  const API_URL = getApiUrl();
 
-  const save = useMutation({
-    mutationFn: (body: any) => isEdit
-      ? api.put(`/api/projects/${project!.id}`, body)
-      : api.post('/api/projects', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      toast.success(isEdit ? 'Proyecto actualizado' : 'Proyecto creado')
-      onOpenChange(false)
-    },
-    onError: (e: any) => toast.error(e.message),
-  })
+  // Función para formatear fechas correctamente (sin timezone shift)
+  const formatDateForInput = (dateString?: string): string => {
+    if (!dateString) return '';
+    
+    // Si es un Date object, convertir a string
+    if (dateString instanceof Date) {
+      return dateString.toISOString().split('T')[0];
+    }
+    
+    // Si ya está en formato YYYY-MM-DD, mantener
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    
+    // Si viene como timestamp o string de fecha, parsear cuidadosamente
+    try {
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    } catch (e) {
+      console.warn('Error parseando fecha:', dateString, e);
+    }
+    
+    return '';
+  };
 
-  if (!open) return null
+  // Función para formatear fechas para envío al backend
+  const formatDateForAPI = (dateString?: string): string | null => {
+    if (!dateString) return null;
+    
+    // Mantener formato YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    
+    return dateString;
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return toast.error('El nombre es requerido')
-    const autoProgress = (stage === 'Go Live' || stage === 'Completado') ? 100 : progress
-    save.mutate({
-      name: name.trim(), description, classification,
-      priority: priority ? parseInt(priority) : null,
-      progress: autoProgress, scrum_stage: stage,
-      responsible_id: responsible || null,
-      portfolio_id: portfolioId,
-      project_start_date: projectStart||null,
-      dev_start_date: devStart||null, dev_end_date: devEnd||null,
-      test_start_date: testStart||null, test_end_date: testEnd||null,
-      planned_go_live_date: plannedGL||null, go_live_date: goLive||null,
-    })
-  }
+  // Handler para guardar proyecto
+  const handleSaveProject = async (): Promise<void> => {
+    if (loading) return;
 
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      {children}
-    </div>
-  )
+    setLoading(true);
+    setError('');
 
-  const inputCls = "w-full border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+    try {
+      console.log('💾 Guardando proyecto...');
+      console.log('📝 Datos originales:', projectData);
+
+      // Preparar datos para envío con fechas formateadas
+      const dataToSend = {
+        ...projectData,
+        fecha_inicio_proyecto: formatDateForAPI(projectData.fecha_inicio_proyecto),
+        fecha_inicio_desarrollo: formatDateForAPI(projectData.fecha_inicio_desarrollo),
+        fecha_fin_desarrollo: formatDateForAPI(projectData.fecha_fin_desarrollo),
+        fecha_inicio_pruebas: formatDateForAPI(projectData.fecha_inicio_pruebas),
+        fecha_fin_pruebas: formatDateForAPI(projectData.fecha_fin_pruebas),
+        fecha_go_live_planeado: formatDateForAPI(projectData.fecha_go_live_planeado),
+        fecha_go_live_real: formatDateForAPI(projectData.fecha_go_live_real)
+      };
+
+      console.log('📤 Datos a enviar:', dataToSend);
+      console.log('🎯 fecha_go_live_real:', dataToSend.fecha_go_live_real);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/projects/${project?.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(dataToSend)
+      });
+
+      console.log('📡 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error response:', errorText);
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Proyecto guardado exitosamente:', result);
+
+      // CRÍTICO: Actualizar el estado local con los datos frescos del servidor
+      if (result.project) {
+        console.log('🔄 Actualizando estado local...');
+        setProjectData(prevData => ({
+          ...prevData,
+          ...result.project
+        }));
+      }
+
+      // Notificar al componente padre que el proyecto se actualizó
+      if (onProjectUpdated && typeof onProjectUpdated === 'function') {
+        console.log('📢 Notificando al componente padre...');
+        onProjectUpdated(result.project || projectData);
+      }
+
+      // Mostrar mensaje de éxito
+      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        // Opcional: cerrar modal después de guardar exitosamente
+        if (onClose) {
+          onClose();
+        }
+      }, 1500);
+
+      console.log('🎉 Guardado completado exitosamente');
+
+    } catch (error: any) {
+      console.error('❌ Error al guardar proyecto:', error);
+      setError(`Error al guardar el proyecto: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler para cambios en los inputs
+  const handleInputChange = (field: keyof Project, value: string | number): void => {
+    console.log('📝 Cambio en campo:', field, '→', value);
+    setProjectData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // useEffect para debug
+  useEffect(() => {
+    console.log('🔄 ProjectData actualizado:', projectData);
+    console.log('📅 Fechas actuales:', {
+      fecha_go_live_real: projectData.fecha_go_live_real,
+      fecha_go_live_planeado: projectData.fecha_go_live_planeado
+    });
+  }, [projectData]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={() => onOpenChange(false)}/>
-      <div className="relative bg-card border rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-card">
-          <h2 className="font-semibold text-lg">{isEdit ? 'Editar proyecto' : 'Nuevo proyecto'}</h2>
-          <button onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5"/>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Editar proyecto</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-2xl"
+          >
+            ×
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <Field label="Nombre *">
-            <input className={inputCls} value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre del proyecto"/>
-          </Field>
+        {/* Mensajes de estado */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+        
+        {success && (
+          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+            ✅ Proyecto actualizado exitosamente
+          </div>
+        )}
 
-          <Field label="Descripción">
-            <textarea className={`${inputCls} resize-none`} rows={2} value={description} onChange={e=>setDesc(e.target.value)} placeholder="Descripción breve"/>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Tipo">
-              <select className={inputCls} value={classification} onChange={e=>setClass(e.target.value as any)}>
-                <option value="Proyecto">Proyecto</option>
-                <option value="Mejora">Mejora</option>
-              </select>
-            </Field>
-            <Field label="Prioridad">
-              <input className={inputCls} type="number" min="1" value={priority} onChange={e=>setPriority(e.target.value)} placeholder="Ej: 1"/>
-            </Field>
+        {/* Formulario */}
+        <div className="space-y-4">
+          {/* Nombre del proyecto */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre del proyecto
+            </label>
+            <input
+              type="text"
+              value={projectData.nombre || ''}
+              onChange={(e) => handleInputChange('nombre', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Etapa">
-              <select className={inputCls} value={stage} onChange={e=>{
-                const newStage = e.target.value
-                setStage(newStage)
-                if (newStage === 'Go Live' || newStage === 'Completado') setProgress(100)
-              }}>
-                {SCRUM_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="Líder">
-              <select className={inputCls} value={responsible} onChange={e=>setResp(e.target.value)}>
-                <option value="">Sin asignar</option>
-                {participants.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
+          {/* Descripción */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción
+            </label>
+            <textarea
+              value={projectData.descripcion || ''}
+              onChange={(e) => handleInputChange('descripcion', e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
-          <Field label={`Avance: ${progress}%`}>
-            <div className="flex items-center gap-2">
-              <input type="range" min="0" max="100" value={progress} onChange={e=>setProgress(parseInt(e.target.value))}
-                className="flex-1 accent-primary"/>
-              <button type="button" onClick={() => {
-                const start = projectStart || devStart
-                const end = goLive || plannedGL
-                if (!start || !end) {
-                  toast.error('Se necesita fecha de inicio y fecha de Go-Live para calcular')
-                  return
-                }
-                const startMs = new Date(start).getTime()
-                const endMs = new Date(end).getTime()
-                const today = Date.now()
-                let pct = 0
-                if (today >= endMs) pct = 100
-                else if (today <= startMs) pct = 0
-                else pct = Math.round(((today - startMs) / (endMs - startMs)) * 100)
-                setProgress(pct)
-                toast.success(`Avance calculado: ${pct}%`)
-              }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors whitespace-nowrap">
-                <TrendingUp className="h-3.5 w-3.5"/> Calcular
-              </button>
+          {/* Fechas en grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Inicio proyecto
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(projectData.fecha_inicio_proyecto)}
+                onChange={(e) => handleInputChange('fecha_inicio_proyecto', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-          </Field>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Inicio proyecto">
-              <input className={inputCls} type="date" value={projectStart} onChange={e=>setProjectStart(e.target.value)}/>
-            </Field>
-            <Field label="Inicio desarrollo">
-              <input className={inputCls} type="date" value={devStart} onChange={e=>setDevStart(e.target.value)}/>
-            </Field>
-            <Field label="Fin desarrollo">
-              <input className={inputCls} type="date" value={devEnd} onChange={e=>setDevEnd(e.target.value)}/>
-            </Field>
-            <Field label="Inicio pruebas">
-              <input className={inputCls} type="date" value={testStart} onChange={e=>setTestStart(e.target.value)}/>
-            </Field>
-            <Field label="Fin pruebas">
-              <input className={inputCls} type="date" value={testEnd} onChange={e=>setTestEnd(e.target.value)}/>
-            </Field>
-            <Field label="Go Live planeado">
-              <input className={inputCls} type="date" value={plannedGL} onChange={e=>setPlannedGL(e.target.value)}/>
-            </Field>
-            <Field label="Go Live real">
-              <input className={inputCls} type="date" value={goLive} onChange={e=>setGoLive(e.target.value)}/>
-            </Field>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Inicio desarrollo
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(projectData.fecha_inicio_desarrollo)}
+                onChange={(e) => handleInputChange('fecha_inicio_desarrollo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fin desarrollo
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(projectData.fecha_fin_desarrollo)}
+                onChange={(e) => handleInputChange('fecha_fin_desarrollo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Inicio pruebas
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(projectData.fecha_inicio_pruebas)}
+                onChange={(e) => handleInputChange('fecha_inicio_pruebas', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fin pruebas
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(projectData.fecha_fin_pruebas)}
+                onChange={(e) => handleInputChange('fecha_fin_pruebas', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Go Live planeado
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(projectData.fecha_go_live_planeado)}
+                onChange={(e) => handleInputChange('fecha_go_live_planeado', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={()=>onOpenChange(false)}
-              className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
-              Cancelar
-            </button>
-            <button type="submit" disabled={save.isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50">
-              {save.isPending && <Loader2 className="h-4 w-4 animate-spin"/>}
-              {isEdit ? 'Guardar cambios' : 'Crear proyecto'}
-            </button>
+          {/* Go Live Real - Campo crítico destacado */}
+          <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
+            <label className="block text-sm font-medium text-blue-700 mb-1">
+              🎯 Go Live Real
+            </label>
+            <input
+              type="date"
+              value={formatDateForInput(projectData.fecha_go_live_real)}
+              onChange={(e) => handleInputChange('fecha_go_live_real', e.target.value)}
+              className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+            <small className="text-blue-600 mt-1 block">
+              Valor actual: {projectData.fecha_go_live_real || 'No asignado'}
+            </small>
           </div>
-        </form>
+
+          {/* Avance */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Avance: {projectData.avance || 0}%
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={projectData.avance || 0}
+                onChange={(e) => handleInputChange('avance', parseInt(e.target.value))}
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => handleInputChange('avance', (projectData.avance || 0) + 5)}
+                className="px-2 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200"
+              >
+                +5%
+              </button>
+              <span className="text-lg font-semibold text-blue-600 min-w-[3rem]">
+                {projectData.avance || 0}%
+              </span>
+            </div>
+          </div>
+
+          {/* Presupuesto */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Presupuesto total
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-gray-500">$</span>
+              <input
+                type="number"
+                value={projectData.presupuesto_total || ''}
+                onChange={(e) => handleInputChange('presupuesto_total', parseFloat(e.target.value) || 0)}
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Botones */}
+        <div className="flex justify-end space-x-3 mt-6">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSaveProject}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Guardando...</span>
+              </>
+            ) : (
+              <span>Guardar cambios</span>
+            )}
+          </button>
+        </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default ProjectFormDialog;

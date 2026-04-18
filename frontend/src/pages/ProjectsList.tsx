@@ -15,10 +15,12 @@ export interface Project {
   description: string; dev_start_date: string | null
   planned_go_live_date: string | null; go_live_date: string | null
   progress: number; classification: string; priority: number | null
-  responsible_name: string | null; portfolio_id: string
+  responsible_name: string | null; responsible_id: string | null
+  requestor_id: string | null; requestor_name: string | null
+  portfolio_id: string
   dev_end_date: string | null; test_start_date: string | null
   test_end_date: string | null; project_start_date: string | null
-  deleted_at: string | null; responsible_id?: string
+  deleted_at: string | null
 }
 
 const STAGE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
@@ -37,8 +39,9 @@ const STAGE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
   'Por Iniciar':       { bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-400' },
 }
 
+const parseDate = (d: string) => d.length === 10 ? new Date(d + 'T12:00:00') : new Date(d)
 const fmt = (d: string | null) => d
-  ? new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+  ? parseDate(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
   : '—'
 
 type SortKey = 'name' | 'classification' | 'responsible_name' | 'scrum_stage' | 'progress' | 'planned_go_live_date' | 'go_live_date'
@@ -69,8 +72,8 @@ export default function ProjectsList() {
   const { activePortfolioId, activePortfolio } = usePortfolio()
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sortKey, setSortKey] = useState<SortKey>('progress')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<string>('')
 
@@ -80,7 +83,11 @@ export default function ProjectsList() {
     enabled: !!activePortfolioId,
   })
 
-  const active = projects.filter(p => !p.deleted_at)
+  const active = projects.filter(p =>
+    !p.deleted_at &&
+    p.scrum_stage !== 'Completado' &&
+    p.scrum_stage !== 'Cancelado'
+  )
   const filtered = useMemo(() => {
     let list = active
     if (search) list = list.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.responsible_name?.toLowerCase().includes(search.toLowerCase()))
@@ -105,7 +112,7 @@ export default function ProjectsList() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Proyectos</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Proyectos en proceso</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{activePortfolio?.name} — {active.length} proyectos</p>
         </div>
         {canCreate && (
@@ -144,7 +151,7 @@ export default function ProjectsList() {
         ) : sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <FolderKanban className="h-12 w-12 mb-3 opacity-20"/>
-            <p className="font-medium">{search || stageFilter ? 'Sin resultados para el filtro actual' : 'No hay proyectos registrados'}</p>
+            <p className="font-medium">{search || stageFilter ? 'Sin resultados para el filtro actual' : 'No hay proyectos en proceso'}</p>
             {(search || stageFilter) && <button onClick={() => { setSearch(''); setStageFilter('') }} className="mt-2 text-sm text-primary hover:underline">Limpiar filtros</button>}
           </div>
         ) : (

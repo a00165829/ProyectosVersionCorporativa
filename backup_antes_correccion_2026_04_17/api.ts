@@ -1,6 +1,6 @@
 // ========================================
 // API CONFIGURATION - PMO PORTAL
-// Fix para detección automática de API_URL y compatibilidad de exports
+// Fix para detección automática de API_URL
 // ========================================
 
 /**
@@ -67,15 +67,10 @@ export const apiClient = {
     });
     
     console.log('📡 GET Response:', response.status, url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return response.json();
+    return response;
   },
 
-  async post(endpoint: string, data: any = {}, options: RequestInit = {}) {
+  async post(endpoint: string, data: any, options: RequestInit = {}) {
     const url = buildAPIURL(endpoint);
     console.log('🔍 POST:', url, data);
     
@@ -87,12 +82,7 @@ export const apiClient = {
     });
     
     console.log('📡 POST Response:', response.status, url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return response.json();
+    return response;
   },
 
   async put(endpoint: string, data: any, options: RequestInit = {}) {
@@ -107,12 +97,7 @@ export const apiClient = {
     });
     
     console.log('📡 PUT Response:', response.status, url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return response.json();
+    return response;
   },
 
   async delete(endpoint: string, options: RequestInit = {}) {
@@ -126,38 +111,7 @@ export const apiClient = {
     });
     
     console.log('📡 DELETE Response:', response.status, url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-};
-
-// ========================================
-// API COMPATIBLE CON IMPORTS EXISTENTES
-// ========================================
-
-// Crear objeto 'api' que sea compatible con todos los imports { api }
-export const api = {
-  // Métodos HTTP básicos
-  get: apiClient.get,
-  post: apiClient.post,
-  put: apiClient.put,
-  delete: apiClient.delete,
-
-  // Método de conveniencia para desarrollo con signIn
-  async devSignIn() {
-    try {
-      console.log('🔧 Ejecutando dev signIn...');
-      const response = await this.post('/api/auth/dev-signin');
-      console.log('✅ Dev signIn exitoso:', response);
-      return response;
-    } catch (error) {
-      console.error('❌ Error en dev signIn:', error);
-      throw error;
-    }
+    return response;
   }
 };
 
@@ -170,49 +124,59 @@ export const projectAPI = {
    * Obtener todos los proyectos
    */
   async getAll() {
-    return api.get(API_CONFIG.ENDPOINTS.PROJECTS);
+    const response = await apiClient.get(API_CONFIG.ENDPOINTS.PROJECTS);
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
   },
 
   /**
    * Obtener un proyecto por ID
    */
   async getById(id: string | number) {
-    return api.get(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+    const response = await apiClient.get(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
   },
 
   /**
    * Crear nuevo proyecto
    */
   async create(projectData: any) {
-    return api.post(API_CONFIG.ENDPOINTS.PROJECTS, projectData);
+    const response = await apiClient.post(API_CONFIG.ENDPOINTS.PROJECTS, projectData);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
   },
 
   /**
    * Actualizar proyecto existente
    */
   async update(id: string | number, projectData: any) {
-    return api.put(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`, projectData);
+    const response = await apiClient.put(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`, projectData);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
   },
 
   /**
    * Eliminar proyecto
    */
   async delete(id: string | number) {
-    return api.delete(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+    const response = await apiClient.delete(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
   }
-};
-
-// ========================================
-// FUNCIONES DE DESARROLLO
-// ========================================
-
-export const getDevRole = (): string => {
-  return sessionStorage.getItem('dev_role') || 'admin';
-};
-
-export const setDevRole = (role: string): void => {
-  sessionStorage.setItem('dev_role', role);
-  console.log('🔧 Dev role set to:', role);
 };
 
 // ========================================
@@ -261,14 +225,43 @@ export const debugAPI = {
 };
 
 // ========================================
-// EXPORTS - SIN DUPLICADOS
+// EJEMPLOS DE USO
 // ========================================
 
-// Solo UN export default
-export default API_CONFIG;
+/*
+// En componentes React:
 
-// Todos los exports nombrados para compatibilidad con imports { api }
-export {
-  apiClient as client,
-  debugAPI as debug
+import { projectAPI, debugAPI } from '@/lib/api';
+
+// Para obtener proyectos:
+const fetchProjects = async () => {
+  try {
+    const projects = await projectAPI.getAll();
+    setProjects(projects);
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
 };
+
+// Para actualizar proyecto:
+const handleSave = async (projectData) => {
+  try {
+    const result = await projectAPI.update(project.id, projectData);
+    console.log('Proyecto actualizado:', result);
+    await fetchProjects(); // Refresh
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+};
+
+// Para debug (ejecutar en consola):
+debugAPI.showConfig();
+debugAPI.testConnection();
+
+*/
+
+// ========================================
+// EXPORT POR DEFECTO
+// ========================================
+
+export default API_CONFIG;
