@@ -56,7 +56,7 @@ REM ── 3. Build en Azure Container Registry con build-args ─────�
 echo.
 echo 🐳 3. Build en ACR con variables Azure AD inyectadas...
 
-az acr build --registry axtelitacr ^
+az acr build --registry axitapppmo ^
     --image pmo-portal:latest ^
     --image pmo-portal:%TIMESTAMP% ^
     --build-arg VITE_API_URL=%VITE_API_URL% ^
