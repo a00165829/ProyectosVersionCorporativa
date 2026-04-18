@@ -11,3 +11,7 @@ postgres_data/
 *.swp
 *.swo
 *~
+*.bak-*
+*.bak
+*.backup
+_archive_sonnet/

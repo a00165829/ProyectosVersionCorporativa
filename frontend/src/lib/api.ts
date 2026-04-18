@@ -1,6 +1,6 @@
 // ========================================
 // API CONFIGURATION - PMO PORTAL
-// INCLUYE MANEJO AUTOMÁTICO DE JWT TOKENS
+// INCLUYE MANEJO AUTOMÁTICO DE JWT TOKENS + GENÉRICOS
 // ========================================
 
 const getAPIURL = (): string => {
@@ -8,13 +8,13 @@ const getAPIURL = (): string => {
     console.log('🔧 API_URL desde VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
-  
+
   if (typeof window !== 'undefined' && window.location) {
     const origin = window.location.origin;
     console.log('🔧 API_URL desde window.location.origin:', origin);
     return origin;
   }
-  
+
   const fallback = 'http://localhost:3000';
   console.log('🔧 API_URL usando fallback:', fallback);
   return fallback;
@@ -77,95 +77,110 @@ export const buildAPIURL = (endpoint: string): string => {
   return `${baseURL}${cleanEndpoint}`;
 };
 
+// ========================================
+// API CLIENT (con genéricos para tipado correcto)
+// ========================================
+
 export const apiClient = {
-  async get(endpoint: string, options: RequestInit = {}) {
+  async get<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = buildAPIURL(endpoint);
     console.log('🔍 GET:', url);
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         ...getAuthHeaders(),
-        ...options.headers
+        ...(options.headers as Record<string, string> | undefined)
       },
       ...options
     });
-    
+
     console.log('📡 GET Response:', response.status, url);
-    
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
     }
-    
-    return response.json();
+
+    return response.json() as Promise<T>;
   },
 
-  async post(endpoint: string, data: any = {}, options: RequestInit = {}) {
+  async post<T = any>(endpoint: string, data: any = {}, options: RequestInit = {}): Promise<T> {
     const url = buildAPIURL(endpoint);
     console.log('🔍 POST:', url, data);
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         ...getAuthHeaders(),
-        ...options.headers
+        ...(options.headers as Record<string, string> | undefined)
       },
       body: JSON.stringify(data),
       ...options
     });
-    
+
     console.log('📡 POST Response:', response.status, url);
-    
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
     }
-    
-    return response.json();
+
+    return response.json() as Promise<T>;
   },
 
-  async put(endpoint: string, data: any, options: RequestInit = {}) {
+  async put<T = any>(endpoint: string, data: any, options: RequestInit = {}): Promise<T> {
     const url = buildAPIURL(endpoint);
     console.log('🔍 PUT:', url, data);
-    
+
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
         ...getAuthHeaders(),
-        ...options.headers
+        ...(options.headers as Record<string, string> | undefined)
       },
       body: JSON.stringify(data),
       ...options
     });
-    
+
     console.log('📡 PUT Response:', response.status, url);
-    
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
     }
-    
-    return response.json();
+
+    return response.json() as Promise<T>;
   },
 
-  async delete(endpoint: string, options: RequestInit = {}) {
+  // ✅ delete ahora acepta body opcional (Trash.tsx lo necesita)
+  async delete<T = any>(endpoint: string, body?: any, options: RequestInit = {}): Promise<T> {
     const url = buildAPIURL(endpoint);
-    console.log('🔍 DELETE:', url);
-    
-    const response = await fetch(url, {
+    console.log('🔍 DELETE:', url, body ?? '');
+
+    const init: RequestInit = {
       method: 'DELETE',
       headers: {
         ...getAuthHeaders(),
-        ...options.headers
+        ...(options.headers as Record<string, string> | undefined)
       },
       ...options
-    });
-    
-    console.log('📡 DELETE Response:', response.status, url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    };
+
+    if (body !== undefined) {
+      init.body = JSON.stringify(body);
     }
-    
-    return response.json();
+
+    const response = await fetch(url, init);
+
+    console.log('📡 DELETE Response:', response.status, url);
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+    }
+
+    return response.json() as Promise<T>;
   }
 };
 
@@ -178,15 +193,15 @@ export const api = {
   async devSignIn() {
     try {
       console.log('🔧 Ejecutando dev signIn...');
-      const response = await this.post('/api/auth/dev-signin');
+      const response = await apiClient.post<any>('/api/auth/dev-signin');
       console.log('✅ Dev signIn exitoso:', response);
-      
+
       // ✅ GUARDAR TOKEN AUTOMÁTICAMENTE
       if (response.token) {
         setAuthToken(response.token);
         console.log('🔐 Token guardado automáticamente');
       }
-      
+
       return response;
     } catch (error) {
       console.error('❌ Error en dev signIn:', error);
@@ -196,20 +211,20 @@ export const api = {
 };
 
 export const projectAPI = {
-  async getAll() {
-    return api.get(API_CONFIG.ENDPOINTS.PROJECTS);
+  async getAll<T = any>() {
+    return api.get<T>(API_CONFIG.ENDPOINTS.PROJECTS);
   },
-  async getById(id: string | number) {
-    return api.get(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+  async getById<T = any>(id: string | number) {
+    return api.get<T>(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
   },
-  async create(projectData: any) {
-    return api.post(API_CONFIG.ENDPOINTS.PROJECTS, projectData);
+  async create<T = any>(projectData: any) {
+    return api.post<T>(API_CONFIG.ENDPOINTS.PROJECTS, projectData);
   },
-  async update(id: string | number, projectData: any) {
-    return api.put(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`, projectData);
+  async update<T = any>(id: string | number, projectData: any) {
+    return api.put<T>(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`, projectData);
   },
-  async delete(id: string | number) {
-    return api.delete(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
+  async delete<T = any>(id: string | number) {
+    return api.delete<T>(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
   }
 };
 
@@ -226,12 +241,12 @@ export const debugAPI = {
   async testConnection() {
     try {
       console.log('🔧 Probando conectividad con:', API_CONFIG.BASE_URL);
-      
+
       const response = await fetch(`${API_CONFIG.BASE_URL}/api/health`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
-      
+
       console.log('📡 Health check response:', response.status);
       return {
         success: response.ok,
