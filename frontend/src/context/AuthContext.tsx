@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { loginRequest, DEV_MODE } from '@/lib/msal'
-import { api } from '@/lib/api'
+import { api, removeAuthToken } from '@/lib/api'
 
 const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || ''
 
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async () => {
     if (DEV_MODE) {
-      // En dev mode, usar la nueva función devSignIn del api
+      // ✅ CORREGIDO: El devSignIn ahora guarda el token automáticamente
       try {
         const result = await api.devSignIn()
         if (result.success) {
@@ -89,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             companyIds: result.user.companyIds || [],
             portfolioIds: result.user.portfolioIds || [],
           }))
+          console.log('🔐 Login completo con token guardado');
         }
       } catch (err) {
         console.error('Error en dev signIn:', err)
@@ -99,8 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    // ✅ CORREGIDO: También limpiar el auth_token
     sessionStorage.removeItem('msal_token')
     sessionStorage.removeItem('user_perms')
+    removeAuthToken() // Limpia localStorage.auth_token
     setUser(null)
     if (!DEV_MODE) await instance.logoutRedirect()
   }

@@ -1,33 +1,61 @@
 // ========================================
 // API CONFIGURATION - PMO PORTAL
-// Fix para detección automática de API_URL y compatibilidad de exports
+// INCLUYE MANEJO AUTOMÁTICO DE JWT TOKENS
 // ========================================
 
-/**
- * Detecta automáticamente la URL de la API basada en el entorno
- * Prioridad: VITE_API_URL > window.location.origin > localhost
- */
 const getAPIURL = (): string => {
-  // 1. Prioridad: Variable de entorno (para producción)
   if (import.meta.env.VITE_API_URL) {
     console.log('🔧 API_URL desde VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
   
-  // 2. Si estamos en el navegador, usar el origin actual
   if (typeof window !== 'undefined' && window.location) {
     const origin = window.location.origin;
     console.log('🔧 API_URL desde window.location.origin:', origin);
     return origin;
   }
   
-  // 3. Fallback para desarrollo
   const fallback = 'http://localhost:3000';
   console.log('🔧 API_URL usando fallback:', fallback);
   return fallback;
 };
 
-// ✅ CONFIGURACIÓN GLOBAL
+// ========================================
+// TOKEN MANAGEMENT
+// ========================================
+
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('auth_token');
+};
+
+export const setAuthToken = (token: string): void => {
+  localStorage.setItem('auth_token', token);
+  console.log('🔐 Token guardado en localStorage');
+};
+
+export const removeAuthToken = (): void => {
+  localStorage.removeItem('auth_token');
+  console.log('🔐 Token eliminado del localStorage');
+};
+
+export const hasAuthToken = (): boolean => {
+  return !!getAuthToken();
+};
+
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  };
+
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+};
+
 export const API_CONFIG = {
   BASE_URL: getAPIURL(),
   ENDPOINTS: {
@@ -43,18 +71,12 @@ export const API_CONFIG = {
   }
 } as const;
 
-/**
- * Helper para construir URLs de API completas
- */
 export const buildAPIURL = (endpoint: string): string => {
   const baseURL = API_CONFIG.BASE_URL;
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return `${baseURL}${cleanEndpoint}`;
 };
 
-/**
- * Wrapper para fetch con configuración automática
- */
 export const apiClient = {
   async get(endpoint: string, options: RequestInit = {}) {
     const url = buildAPIURL(endpoint);
@@ -62,7 +84,10 @@ export const apiClient = {
     
     const response = await fetch(url, {
       method: 'GET',
-      headers: API_CONFIG.HEADERS,
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers
+      },
       ...options
     });
     
@@ -81,7 +106,10 @@ export const apiClient = {
     
     const response = await fetch(url, {
       method: 'POST',
-      headers: API_CONFIG.HEADERS,
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers
+      },
       body: JSON.stringify(data),
       ...options
     });
@@ -101,7 +129,10 @@ export const apiClient = {
     
     const response = await fetch(url, {
       method: 'PUT',
-      headers: API_CONFIG.HEADERS,
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers
+      },
       body: JSON.stringify(data),
       ...options
     });
@@ -121,7 +152,10 @@ export const apiClient = {
     
     const response = await fetch(url, {
       method: 'DELETE',
-      headers: API_CONFIG.HEADERS,
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers
+      },
       ...options
     });
     
@@ -135,24 +169,24 @@ export const apiClient = {
   }
 };
 
-// ========================================
-// API COMPATIBLE CON IMPORTS EXISTENTES
-// ========================================
-
-// Crear objeto 'api' que sea compatible con todos los imports { api }
 export const api = {
-  // Métodos HTTP básicos
   get: apiClient.get,
   post: apiClient.post,
   put: apiClient.put,
   delete: apiClient.delete,
 
-  // Método de conveniencia para desarrollo con signIn
   async devSignIn() {
     try {
       console.log('🔧 Ejecutando dev signIn...');
       const response = await this.post('/api/auth/dev-signin');
       console.log('✅ Dev signIn exitoso:', response);
+      
+      // ✅ GUARDAR TOKEN AUTOMÁTICAMENTE
+      if (response.token) {
+        setAuthToken(response.token);
+        console.log('🔐 Token guardado automáticamente');
+      }
+      
       return response;
     } catch (error) {
       console.error('❌ Error en dev signIn:', error);
@@ -161,50 +195,23 @@ export const api = {
   }
 };
 
-// ========================================
-// FUNCIONES ESPECÍFICAS PARA PROYECTOS
-// ========================================
-
 export const projectAPI = {
-  /**
-   * Obtener todos los proyectos
-   */
   async getAll() {
     return api.get(API_CONFIG.ENDPOINTS.PROJECTS);
   },
-
-  /**
-   * Obtener un proyecto por ID
-   */
   async getById(id: string | number) {
     return api.get(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
   },
-
-  /**
-   * Crear nuevo proyecto
-   */
   async create(projectData: any) {
     return api.post(API_CONFIG.ENDPOINTS.PROJECTS, projectData);
   },
-
-  /**
-   * Actualizar proyecto existente
-   */
   async update(id: string | number, projectData: any) {
     return api.put(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`, projectData);
   },
-
-  /**
-   * Eliminar proyecto
-   */
   async delete(id: string | number) {
     return api.delete(`${API_CONFIG.ENDPOINTS.PROJECTS}/${id}`);
   }
 };
-
-// ========================================
-// FUNCIONES DE DESARROLLO
-// ========================================
 
 export const getDevRole = (): string => {
   return sessionStorage.getItem('dev_role') || 'admin';
@@ -215,14 +222,7 @@ export const setDevRole = (role: string): void => {
   console.log('🔧 Dev role set to:', role);
 };
 
-// ========================================
-// DIAGNÓSTICO Y DEBUG
-// ========================================
-
 export const debugAPI = {
-  /**
-   * Verificar conectividad con el backend
-   */
   async testConnection() {
     try {
       console.log('🔧 Probando conectividad con:', API_CONFIG.BASE_URL);
@@ -248,26 +248,36 @@ export const debugAPI = {
     }
   },
 
-  /**
-   * Mostrar configuración actual
-   */
   showConfig() {
     console.log('🔧 API Configuration:');
     console.log('  BASE_URL:', API_CONFIG.BASE_URL);
     console.log('  VITE_API_URL:', import.meta.env.VITE_API_URL);
     console.log('  window.location.origin:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
     console.log('  ENDPOINTS:', API_CONFIG.ENDPOINTS);
+    console.log('  HAS_TOKEN:', hasAuthToken());
+  },
+
+  showTokenInfo() {
+    const token = getAuthToken();
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('🔐 Token Info:');
+        console.log('  User ID:', payload.id);
+        console.log('  Role:', payload.role);
+        console.log('  Expires:', new Date(payload.exp * 1000));
+        console.log('  Valid:', payload.exp * 1000 > Date.now());
+      } catch (error) {
+        console.log('🔐 Token presente pero no decodificable');
+      }
+    } else {
+      console.log('🔐 No hay token guardado');
+    }
   }
 };
 
-// ========================================
-// EXPORTS - SIN DUPLICADOS
-// ========================================
-
-// Solo UN export default
 export default API_CONFIG;
 
-// Todos los exports nombrados para compatibilidad con imports { api }
 export {
   apiClient as client,
   debugAPI as debug
